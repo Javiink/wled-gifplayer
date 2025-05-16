@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { WledService } from '../services/wled.service';
 import { GifService } from '../services/gif.service';
+import { GifFile } from '../models/gif.model';
 
 @Component({
   selector: 'app-favorites',
@@ -29,22 +30,7 @@ export class FavoritesComponent {
     protected gifService: GifService
   ) { }
 
-  async playGif(gif: any): Promise<void> {
-    const ip = this.wledService.getWledIp();
-    if (!ip) {
-      alert('Configura la IP de WLED primero.');
-      return;
-    }
-
-    const currentFile = await this.wledService.getCurrentGif(ip).toPromise();
-
-    const gifUrl = this.gifService.getGifUrl(gif.file);
-
-    await this.wledService.uploadGif(ip, gifUrl);
-    await this.wledService.playGif(ip, gif.file);
-
-    if (currentFile && currentFile !== gif.file) {
-      await this.wledService.deleteOldGif(ip, currentFile);
-    }
+  playGif(gif: GifFile): void {
+    this.wledService.playGif(gif.file).subscribe();
   }
 }

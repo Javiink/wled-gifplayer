@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { WledService } from '../services/wled.service';
 import { GifService } from '../services/gif.service';
+import { GifFile } from '../models/gif.model';
 
 @Component({
   selector: 'app-gif-grid',
@@ -23,19 +24,19 @@ import { GifService } from '../services/gif.service';
   `
 })
 export class GifGridComponent {
-  @Input() gifs: any[] = [];
-  favorites: any[] = JSON.parse(localStorage.getItem('favorites') || '[]');
+  @Input() gifs: GifFile[] = [];
+  favorites: GifFile[] = JSON.parse(localStorage.getItem('favorites') || '[]');
 
   constructor(
     private wledService: WledService,
     protected gifService: GifService
   ) { }
 
-  isFavorite(gif: any): boolean {
+  isFavorite(gif: GifFile): boolean {
     return this.favorites.some(f => f.file === gif.file);
   }
 
-  toggleFavorite(gif: any): void {
+  toggleFavorite(gif: GifFile): void {
     const index = this.favorites.findIndex(f => f.file === gif.file);
     if (index > -1) {
       this.favorites.splice(index, 1);
@@ -45,28 +46,13 @@ export class GifGridComponent {
     localStorage.setItem('favorites', JSON.stringify(this.favorites));
   }
 
-  hideGif(gif: any): void {
+  hideGif(gif: GifFile): void {
     let hidden = JSON.parse(localStorage.getItem('hidden') || '[]');
     hidden.push(gif);
     localStorage.setItem('hidden', JSON.stringify(hidden));
   }
 
-  async playGif(gif: any): Promise<void> {
-    const ip = this.wledService.getWledIp();
-    if (!ip) {
-      alert('Configura la IP de WLED primero.');
-      return;
-    }
-
-    //const currentFile = await this.wledService.getCurrentGif(ip).toPromise();
-
-    const gifUrl = this.gifService.getGifUrl(gif.file);
-
-    this.wledService.uploadGif(ip, gifUrl);
-    this.wledService.playGif(ip, gif.file);
-
-    //if (currentFile && currentFile !== gif.file) {
-    //  await this.wledService.deleteOldGif(ip, currentFile);
-    //}
+  playGif(gif: GifFile): void {
+    this.wledService.playGif(gif.file).subscribe();
   }
 }

@@ -74,11 +74,11 @@ export class GifGridInfiniteComponent implements AfterViewInit {
     observer.observe(this.sentinel.nativeElement);
   }
 
-  isFavorite(gif: any): boolean {
+  isFavorite(gif: GifFile): boolean {
     return this.favorites.some(f => f.file === gif.file);
   }
 
-  toggleFavorite(gif: any): void {
+  toggleFavorite(gif: GifFile): void {
     const index = this.favorites.findIndex(f => f.file === gif.file);
     if (index > -1) {
       this.favorites.splice(index, 1);
@@ -88,28 +88,13 @@ export class GifGridInfiniteComponent implements AfterViewInit {
     localStorage.setItem('favorites', JSON.stringify(this.favorites));
   }
 
-  hideGif(gif: any): void {
+  hideGif(gif: GifFile): void {
     let hidden = JSON.parse(localStorage.getItem('hidden') || '[]');
     hidden.push(gif);
     localStorage.setItem('hidden', JSON.stringify(hidden));
   }
 
-  async playGif(gif: any): Promise<void> {
-    const ip = this.wledService.getWledIp();
-    if (!ip) {
-      alert('Configura la IP de WLED primero.');
-      return;
-    }
-
-    const currentFile = await firstValueFrom(this.wledService.getCurrentGif(ip));
-
-    const gifUrl = this.gifService.getGifUrl(gif.file);
-
-    await firstValueFrom(this.wledService.uploadGif(ip, gifUrl));
-    await firstValueFrom(this.wledService.playGif(ip, gif.file));
-
-    if (currentFile && currentFile !== gif.file) {
-      await firstValueFrom(this.wledService.deleteOldGif(ip, currentFile));
-    }
+  playGif(gif: GifFile): void {
+    this.wledService.playGif(gif.file).subscribe();
   }
 }
