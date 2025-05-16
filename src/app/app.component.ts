@@ -1,12 +1,84 @@
 import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+
+// Components
+import { GifGridInfiniteComponent } from './components/gif-grid-infinite.component';
+import { FavoritesComponent } from './components/favorites.component';
+import { SettingsComponent } from './components/settings.component';
+import { CurrentGifComponent } from './components/current-gif.component';
+import { HiddenComponent } from './components/hidden.component';
+
+// Services
+import { GifService } from './services/gif.service';
+import { WledService } from './services/wled.service';
+
+// Models
+import { GifFile } from './models/gif.model';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
-  templateUrl: './app.component.html',
-  styleUrl: './app.component.css'
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    GifGridInfiniteComponent,
+    FavoritesComponent,
+    SettingsComponent,
+    CurrentGifComponent,
+    HiddenComponent
+  ],
+  template: `
+    <div class="container mx-auto p-4">
+      <h1 class="text-3xl font-bold mb-4">Matrix LED GIF Player</h1>
+
+      <!-- Current Playing -->
+      <app-current-gif [currentGif]="currentGif"></app-current-gif>
+
+      <!-- Settings -->
+      <button (click)="toggleSettings()" class="mb-4 px-4 py-2 bg-blue-500 text-white rounded">⚙️ Configuración</button>
+      <app-settings *ngIf="showSettings"></app-settings>
+
+      <!-- Favorites -->
+      <app-favorites [favorites]="favorites"></app-favorites>
+
+      <!-- Grid con Infinite Scroll -->
+      <h2 class="text-xl font-semibold mb-2">GIFs Disponibles</h2>
+      <app-gif-grid-infinite></app-gif-grid-infinite>
+
+      <!-- Hidden -->
+      <button (click)="showHidden = !showHidden" class="mb-2 text-blue-500">
+        ▶ {{ showHidden ? 'Ocultar' : 'Mostrar' }} Ocultados
+      </button>
+      <app-hidden [hidden]="hidden" [showHidden]="showHidden"></app-hidden>
+    </div>
+  `
 })
 export class AppComponent {
-  title = 'wled-gifplayer';
+  favorites: GifFile[] = JSON.parse(localStorage.getItem('favorites') || '[]');
+  hidden: GifFile[] = JSON.parse(localStorage.getItem('hidden') || '[]');
+  currentGif: GifFile | null = null;
+  showSettings = false;
+  showHidden = false;
+  wledIp = '';
+
+  constructor(private gifService: GifService, private wledService: WledService) {
+    this.wledIp = this.wledService.getWledIp() || '';
+    this.checkCurrentPlayback();
+  }
+
+  checkCurrentPlayback(): void {
+    const ip = this.wledService.getWledIp();
+    if (!ip) return;
+
+    this.wledService.getCurrentGif(ip).subscribe(currentFile => {
+      if (currentFile) {
+        this.currentGif = this.gifService.findGifById(currentFile) || null;
+      }
+    });
+  }
+
+  toggleSettings(): void {
+    this.showSettings = !this.showSettings;
+  }
 }

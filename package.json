@@ -5,6 +5,7 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "build:dev": "ng build --configuration development",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
@@ -17,7 +18,15 @@
     "@angular/platform-browser": "^19.2.0",
     "@angular/platform-browser-dynamic": "^19.2.0",
     "@angular/router": "^19.2.0",
+    "@fortawesome/angular-fontawesome": "^1.0.0",
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@fortawesome/free-regular-svg-icons": "^6.7.1",
+    "@fortawesome/free-solid-svg-icons": "^6.7.1",
+    "@tailwindcss/postcss": "^4.1.6",
+    "postcss": "^8.5.3",
     "rxjs": "~7.8.0",
+    "tailwind-gradient-mask-image": "^1.2.0",
+    "tailwindcss": "^4.1.6",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"
   },
