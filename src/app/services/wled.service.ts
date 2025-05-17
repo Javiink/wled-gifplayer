@@ -31,7 +31,7 @@ export class WledService {
     return this.currentGifSubject.getValue() ?? '';
   }
 
-  currentGif(): void {
+  updateCurrentGif(): void {
     const ip = this.getWledIp();
     if (!ip) return;
     this.http.get<any>(`http://${ip}/json/state`).pipe(
@@ -87,7 +87,7 @@ export class WledService {
           map(() => true),
           catchError(() => of(false)),
           switchMap((success) => {
-            this.currentGif();
+            this.updateCurrentGif();
             return of(success);
           })
         );

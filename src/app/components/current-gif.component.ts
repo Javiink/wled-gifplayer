@@ -25,6 +25,6 @@ export class CurrentGifComponent {
 
   constructor(public gifService: GifService, public wledService: WledService) {
     this.currentGif = wledService.currentGif$;
-    this.wledService.currentGif();
+    this.wledService.updateCurrentGif();
   }
 }
