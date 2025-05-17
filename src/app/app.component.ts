@@ -9,10 +9,6 @@ import { SettingsComponent } from './components/settings.component';
 import { CurrentGifComponent } from './components/current-gif.component';
 import { HiddenComponent } from './components/hidden.component';
 
-// Services
-import { GifService } from './services/gif.service';
-import { WledService } from './services/wled.service';
-
 // Models
 import { GifFile } from './models/gif.model';
 
@@ -33,7 +29,7 @@ import { GifFile } from './models/gif.model';
       <h1 class="text-3xl font-bold mb-4">Matrix LED GIF Player</h1>
 
       <!-- Current Playing -->
-      <app-current-gif [currentGif]="currentGif"></app-current-gif>
+      <app-current-gif></app-current-gif>
 
       <!-- Settings -->
       <button (click)="toggleSettings()" class="mb-4 px-4 py-2 bg-blue-500 text-white rounded">⚙️ Configuración</button>
@@ -57,25 +53,10 @@ import { GifFile } from './models/gif.model';
 export class AppComponent {
   favorites: GifFile[] = JSON.parse(localStorage.getItem('favorites') || '[]');
   hidden: GifFile[] = JSON.parse(localStorage.getItem('hidden') || '[]');
-  currentGif: GifFile | null = null;
   showSettings = false;
   showHidden = false;
-  wledIp = '';
 
-  constructor(private gifService: GifService, private wledService: WledService) {
-    this.wledIp = this.wledService.getWledIp() || '';
-    this.checkCurrentPlayback();
-  }
-
-  checkCurrentPlayback(): void {
-    const ip = this.wledService.getWledIp();
-    if (!ip) return;
-
-    this.wledService.getCurrentGif(ip).subscribe(currentFile => {
-      if (currentFile) {
-        this.currentGif = this.gifService.findGifById(currentFile) || null;
-      }
-    });
+  constructor() {
   }
 
   toggleSettings(): void {

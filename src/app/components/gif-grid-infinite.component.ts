@@ -11,9 +11,9 @@ import { firstValueFrom } from 'rxjs';
     <div>
       <div class="grid grid-cols-6 gap-4">
         @for (gif of displayedGifs; track gif.file) {
-          <div class="relative group gif-item">
-            <img [src]="gifService.getGifUrl(gif.file)" class="w-[96px] h-[96px] gif" (click)="playGif(gif)">
-            <div class="size-full absolute top-0 left-0 bg-black opacity-0 group-hover:opacity-10"></div>
+          <div class="relative group aspect-square gif-item">
+            <img [src]="gifService.getGifUrl(gif.file)" class="size-full gif" (click)="playGif(gif)">
+            <div class="size-full absolute top-0 left-0 bg-black opacity-0 group-hover:opacity-20"></div>
             <div class="absolute opacity-0 size-full top-0 left-0 p-1 group-hover:opacity-90 transition-opacity flex justify-center-safe space-x-2">
               <button (click)="playGif(gif)" title="Reproducir" class="opacity-50 hover:opacity-100 m-0! text-white text-shadow-lg text-shadow-black cursor-pointer">
                 <i class="fas fa-play fa-3x"></i>
