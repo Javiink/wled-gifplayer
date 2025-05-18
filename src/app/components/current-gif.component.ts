@@ -14,9 +14,9 @@ import { Observable } from 'rxjs';
           @if (currentGif | async) {
             <img [src]="gifService.getGifUrl((currentGif | async)!)" alt="Current GIF" class="size-full shadow-2xl shadow-cyan-500/50 ring-1 ring-cyan-400 rounded-sm gif">
           } @else {
-            <div class="flex flex-col flex-nowrap">
-              <p class="block text-8xl font-mono">?</p>
-              <small class="block">There is no image currently playing</small>
+            <div class="flex flex-col flex-nowrap size-full p-3 shadow-2xl shadow-cyan-500/50 ring-1 ring-cyan-400 rounded-sm">
+              <p class="block text-8xl font-mono mt-auto">?</p>
+              <small class="block mb-auto">There isn't anything playing right now</small>
             </div>
           }
         </div>
