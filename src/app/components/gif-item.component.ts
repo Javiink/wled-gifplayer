@@ -10,7 +10,7 @@ import { NgClass } from '@angular/common';
   standalone: true,
   imports: [NgClass],
   template: `
-    <div class="relative group aspect-square gif-item">
+    <div class="relative group aspect-square rounded-xs overflow-hidden drop-shadow-xl drop-shadow-cyan-900 hover:ring-1 hover:ring-cyan-300 hover:drop-shadow-cyan-600 transition-shadow gif-item">
       <img [src]="gifService.getGifUrl(gif.file)" class="size-full gif" (click)="playGif(gif)">
       <div class="size-full absolute top-0 left-0 bg-black opacity-0 group-hover:opacity-20"></div>
       <div class="absolute opacity-0 size-full top-0 left-0 p-1 group-hover:opacity-90 transition-opacity flex justify-center-safe space-x-2">

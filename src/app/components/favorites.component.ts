@@ -13,7 +13,7 @@ import { GifItemComponent } from './gif-item.component';
       @if (favorites.length > 0) {
         <div class="mb-6">
           <h2 class="text-xl font-semibold mb-2"><i class="fas fa-heart text-red-600"></i> Favourited</h2>
-          <div class="grid grid-cols-6 gap-4">
+          <div class="grid gap-4 gif-grid">
             @for (gif of favorites; track gif.file) {
               <app-gif-item [gif]="gif"></app-gif-item>
             }
