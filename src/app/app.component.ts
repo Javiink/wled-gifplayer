@@ -24,34 +24,9 @@ import { GifFile } from './models/gif.model';
     CurrentGifComponent,
     HiddenComponent
   ],
-  template: `
-    <div class="container mx-auto p-4">
-      <h1 class="text-3xl font-bold mb-4">Matrix LED GIF Player</h1>
-
-      <!-- Current Playing -->
-      <app-current-gif></app-current-gif>
-
-      <!-- Settings -->
-      <button (click)="toggleSettings()" class="mb-4 px-4 py-2 bg-blue-500 text-white rounded">⚙️ Configuración</button>
-      <app-settings *ngIf="showSettings"></app-settings>
-
-      <!-- Favorites -->
-      <app-favorites [favorites]="favorites"></app-favorites>
-
-      <!-- Grid con Infinite Scroll -->
-      <h2 class="text-xl font-semibold mb-2">GIFs Disponibles</h2>
-      <app-gif-grid-infinite></app-gif-grid-infinite>
-
-      <!-- Hidden -->
-      <button (click)="showHidden = !showHidden" class="mb-2 text-blue-500">
-        ▶ {{ showHidden ? 'Ocultar' : 'Mostrar' }} Ocultados
-      </button>
-      <app-hidden [hidden]="hidden" [showHidden]="showHidden"></app-hidden>
-    </div>
-  `
+  templateUrl: 'app.component.html'
 })
 export class AppComponent {
-  favorites: GifFile[] = JSON.parse(localStorage.getItem('favorites') || '[]');
   hidden: GifFile[] = JSON.parse(localStorage.getItem('hidden') || '[]');
   showSettings = false;
   showHidden = false;

@@ -1,6 +1,14 @@
 /* You can add global styles to this file, and also import other style files */
 @import "tailwindcss";
 
+body{
+  @apply text-blue-50;
+}
 img.gif {
   image-rendering: pixelated;
+  user-select: none;
+  pointer-events: none;
+}
+.gif-grid {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
 }

@@ -9,20 +9,14 @@ import { GifItemComponent } from './gif-item.component';
   imports: [GifItemComponent],
   template: `
     <div>
-      <div class="grid grid-cols-6 gap-4">
+      <div class="grid grid-cols-6 gap-4 gif-grid">
         @for (gif of displayedGifs; track gif.file) {
           <app-gif-item [gif]="gif"></app-gif-item>
         }
       </div>
 
-      <!-- Invisible sentinel -->
       <div #sentinel class="h-1"></div>
     </div>
-  `,
-  styles: `
-    .grid {
-      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-    }
   `
 })
 export class GifGridInfiniteComponent implements AfterViewInit {

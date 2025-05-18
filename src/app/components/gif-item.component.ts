@@ -2,10 +2,13 @@ import { Component, Input } from '@angular/core';
 import { GifFile } from '../models/gif.model';
 import { GifService } from '../services/gif.service';
 import { WledService } from '../services/wled.service';
+import { FavoritesService } from '../services/favorites.service';
+import { NgClass } from '@angular/common';
 
 @Component({
   selector: 'app-gif-item',
   standalone: true,
+  imports: [NgClass],
   template: `
     <div class="relative group aspect-square gif-item">
       <img [src]="gifService.getGifUrl(gif.file)" class="size-full gif" (click)="playGif(gif)">
@@ -15,7 +18,7 @@ import { WledService } from '../services/wled.service';
           <i class="fas fa-play fa-3x"></i>
         </button>
         <button (click)="toggleFavorite(gif)" title="Favorito" class="absolute left-1 top-0 opacity-50 hover:opacity-100 text-white text-shadow-sm text-shadow-black cursor-pointer">
-          <i [class.fas]="isFavorite(gif)" [class.far]="!isFavorite(gif)" class="fa-heart"></i>
+          <i [ngClass]="{'fas text-red-600': isFavorite(gif)}" [class.far]="!isFavorite(gif)" class="fa-heart"></i>
         </button>
       </div>
     </div>
@@ -28,28 +31,19 @@ import { WledService } from '../services/wled.service';
 })
 export class GifItemComponent {
   @Input({ required: true }) gif!: GifFile;
-  favorites: any[] = JSON.parse(localStorage.getItem('favorites') || '[]');
 
-  constructor(public gifService: GifService, private wledService: WledService) { }
+  constructor(
+    public gifService: GifService,
+    private wledService: WledService,
+    public favoritesService: FavoritesService
+  ) { }
 
   isFavorite(gif: GifFile): boolean {
-    return this.favorites.some(f => f.file === gif.file);
+    return this.favoritesService.isFavorite(gif);
   }
 
   toggleFavorite(gif: GifFile): void {
-    const index = this.favorites.findIndex(f => f.file === gif.file);
-    if (index > -1) {
-      this.favorites.splice(index, 1);
-    } else {
-      this.favorites.push(gif);
-    }
-    localStorage.setItem('favorites', JSON.stringify(this.favorites));
-  }
-
-  hideGif(gif: GifFile): void {
-    let hidden = JSON.parse(localStorage.getItem('hidden') || '[]');
-    hidden.push(gif);
-    localStorage.setItem('hidden', JSON.stringify(hidden));
+    this.favoritesService.toggleFavorite(gif);
   }
 
   playGif(gif: GifFile): void {

@@ -9,10 +9,10 @@ import { Observable } from 'rxjs';
   standalone: true,
   imports: [AsyncPipe],
   template: `
-      <div class="mb-6 border p-4 rounded-lg bg-gray-100 text-center">
+      <div class="p-4 text-center aspect-square">
         <div class="mx-auto w-[192px] h-[192px] flex justify-center items-center object-contain">
           @if (currentGif | async) {
-            <img [src]="gifService.getGifUrl((currentGif | async)!)" alt="Current GIF" class="size-full gif">
+            <img [src]="gifService.getGifUrl((currentGif | async)!)" alt="Current GIF" class="size-full shadow-2xl shadow-cyan-500/50 ring-1 ring-cyan-400 rounded-sm gif">
           } @else {
             <p class="text-8xl font-mono">?</p>
           }
