@@ -23,6 +23,11 @@ Go to <a href="">the application page</a> and set up your device's IP address in
 > [!IMPORTANT]  
 > Your device needs to run WLED v0.16.0+ to be able to play GIFs with this tool.
 
+> [!WARNING]
+> You may need to disable "mixed-content" protection in your browser for this app to work. You can do this accessing to the site settings and allowing "Insecure content". In Chrome: Address bar > left site-settings icon > Site settings > Insecure content > Allow.
+>
+> *Why?* This is a safety protection feature that most browsers implements. As you are loading this application from a secure HTTPS context (GitHub Pages) and it is trying to reach your WLED device in an insecure HTTP context (it does not have a SSL certificate), the browser blocks the requests the application make to the device. Disabling this feature you are allowing the application to reach your device. *You could also setup a local proxy in your computer to make requests to the proxy and mask them, or download this repo, build it yourself and host it in your computer.*
+
 ## ✌️ Contributing
 
 Contributions this project are always welcome!
