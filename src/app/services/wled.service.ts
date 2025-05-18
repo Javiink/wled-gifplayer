@@ -1,8 +1,10 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, from, Observable, of, throwError } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { GifService } from './gif.service';
+import { ModalService } from './modal.service';
+import { HtmlModalContentComponent } from '../components/html-modal-content-component';
 
 @Injectable({ providedIn: 'root' })
 export class WledService {
@@ -10,7 +12,7 @@ export class WledService {
   private currentGifSubject = new BehaviorSubject<string | null>(null);
   currentGif$ = this.currentGifSubject.asObservable();
 
-  constructor(private http: HttpClient, private gifService: GifService) { }
+  constructor(private http: HttpClient, private gifService: GifService, private modal: ModalService) { }
 
   setWledIp(ip: string) {
     localStorage.setItem(this.storedIpKey, ip);
@@ -18,13 +20,6 @@ export class WledService {
 
   getWledIp(): string | null {
     return localStorage.getItem(this.storedIpKey);
-  }
-
-  isWledAvailable(ip: string): Observable<boolean> {
-    return this.http.get(`http://${ip}/json/info`).pipe(
-      map(() => true),
-      catchError(() => of(false))
-    );
   }
 
   getCurrentGif(): string {
@@ -41,7 +36,13 @@ export class WledService {
         }
         return null;
       }),
-      catchError(() => of(null))
+      catchError((error: HttpErrorResponse) => {
+        if (error.status === 0 && error.statusText == "Unknown Error") {
+          console.error(error);
+          this.showMixedContentWarning();
+        }
+        return of(false);
+      })
     ).subscribe(gif => this.currentGifSubject.next(gif));
   }
 
@@ -59,7 +60,7 @@ export class WledService {
   playGif(filename: string): Observable<boolean> {
     const ip = this.getWledIp();
     if (!ip) {
-      alert('Configure the WLED device IP address first.');
+      this.modal.open(HtmlModalContentComponent, { html: 'Configure the WLED device IP address first.' });
       return of(false);
     }
 
@@ -99,6 +100,18 @@ export class WledService {
     const formData = new FormData();
     formData.append('path', `/${filename}`);
     return this.http.request('DELETE', `http://${ip}/edit`, {body: formData, responseType: 'text'});
+  }
+
+  showMixedContentWarning() {
+    const html = `
+      <p class="text-2xl">Oops! 😕</p>
+      <p>The request to the device was blocked by your browser. This is likely caused by the mixed-content security policy.</p>
+      <p class="mt-2 text-lg">❓ What now?</p>
+      <p>You can try disabling this policy clicking on the site-settings icon (on the left of the URL top bar) > Site settings > Insecure content > Allow, and then refresh the page.</p>
+      <p class="mt-2 text-lg">Why is it blocked? Is it safe to allow the content?</p>
+      <p>As you are loading this application from a secure HTTPS context (GitHub Pages) and it is trying to reach your WLED device in an insecure HTTP context (it does not have a SSL certificate), the browser blocks the requests the application make to the device. Disabling this feature you are allowing the application to reach your device. Is is safe in this context, but you should not be doing it everywhere if you don't know what if could affect.</p>
+    `;
+    return this.modal.open(HtmlModalContentComponent, { html });
   }
 }
 

@@ -29,6 +29,5 @@ export class AppComponent {
 
   async openConfigDialog() {
     const result = await this.modal.open(SettingsComponent);
-    console.log('Resultado del modal:', result);
   }
 }
