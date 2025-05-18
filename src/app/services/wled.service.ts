@@ -71,7 +71,6 @@ export class WledService {
     const gifUrl = this.gifService.getGifUrl(filename);
 
     return this.uploadGif(ip, gifUrl).pipe(
-      switchMap(() => this.deleteOldGif(ip, currentFile!)),
       switchMap(() => {
         const payload = {
           on: true,
@@ -88,10 +87,11 @@ export class WledService {
           catchError(() => of(false)),
           switchMap((success) => {
             this.updateCurrentGif();
+            this.deleteOldGif(ip, currentFile!).subscribe();
             return of(success);
           })
         );
-      })
+      }),
     );
   }
 
