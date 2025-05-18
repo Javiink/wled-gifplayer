@@ -36,7 +36,7 @@ export class WledService {
     if (!ip) return;
     this.http.get<any>(`http://${ip}/json/state`).pipe(
       map(state => {
-        if (Array.isArray(state?.seg) && state.seg[0]?.n) {
+        if (Array.isArray(state?.seg) && state.seg[0]?.n && state.seg[0].fx == 53) {
           return state.seg[0].n;
         }
         return null;
