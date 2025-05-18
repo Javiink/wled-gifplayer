@@ -7,6 +7,7 @@ import { GifGridInfiniteComponent } from './components/gif-grid-infinite.compone
 import { FavoritesComponent } from './components/favorites.component';
 import { SettingsComponent } from './components/settings.component';
 import { CurrentGifComponent } from './components/current-gif.component';
+import { ModalService } from './services/modal.service';
 
 @Component({
   selector: 'app-root',
@@ -16,7 +17,6 @@ import { CurrentGifComponent } from './components/current-gif.component';
     FormsModule,
     GifGridInfiniteComponent,
     FavoritesComponent,
-    SettingsComponent,
     CurrentGifComponent
   ],
   templateUrl: 'app.component.html'
@@ -24,10 +24,11 @@ import { CurrentGifComponent } from './components/current-gif.component';
 export class AppComponent {
   showSettings = false;
 
-  constructor() {
+  constructor(private modal: ModalService) {
   }
 
-  toggleSettings(): void {
-    this.showSettings = !this.showSettings;
+  async openConfigDialog() {
+    const result = await this.modal.open(SettingsComponent);
+    console.log('Resultado del modal:', result);
   }
 }

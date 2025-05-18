@@ -7,14 +7,17 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [FormsModule],
   template: `
-    <div class="mb-6 p-4 border rounded ">
-      <input [(ngModel)]="wledIp" placeholder="WLED device IP" class="border p-2 mr-2 rounded">
+    <p class="mb-4 text-xl"><i class="fas fa-cog"></i> Settings</p>
+    <div>
+      <p class="mb-2">Your WLED-based 2D matrix device IP:</p>
+      <input [(ngModel)]="wledIp" placeholder="ex. 192.168.X.X" class="bg-cyan-900 border border-cyan-700 p-2 mr-2 rounded-lg">
       <button (click)="save()" class="bg-cyan-500 shadow-lg shadow-cyan-500/50 px-4 py-2 rounded cursor-pointer"><i class="fas fa-save"></i> Save</button>
     </div>
   `
 })
 export class SettingsComponent {
   wledIp = '';
+  close!: (result?: any) => void;
 
   constructor(protected wledService: WledService) {
     this.wledIp = wledService.getWledIp() || '';
@@ -23,5 +26,6 @@ export class SettingsComponent {
   save(): void {
     this.wledService.setWledIp(this.wledIp);
     this.wledService.updateCurrentGif();
+    if (this.close) this.close();
   }
 }
