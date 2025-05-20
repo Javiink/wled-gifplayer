@@ -10,8 +10,10 @@ import { FormsModule } from '@angular/forms';
     <p class="mb-4 text-xl"><i class="fas fa-cog"></i> Settings</p>
     <div>
       <p class="mb-2">Your WLED-based 2D matrix device IP:</p>
-      <input [(ngModel)]="wledIp" placeholder="ex. 192.168.X.X" class="bg-cyan-900 border border-cyan-700 p-2 mr-2 rounded-lg">
-      <button (click)="save()" class="bg-cyan-500 shadow-lg shadow-cyan-500/50 px-4 py-2 rounded cursor-pointer"><i class="fas fa-save"></i> Save</button>
+      <div class="flex flex-nowrap">
+        <input [(ngModel)]="wledIp" placeholder="ex. 192.168.X.X" class="w-3/5 bg-cyan-900 border border-cyan-700 p-2 mr-2 rounded-lg">
+        <button (click)="save()" class="w-2/5 grow bg-cyan-500 shadow-lg shadow-cyan-500/50 px-4 py-2 rounded cursor-pointer"><i class="fas fa-save"></i> Save</button>
+      </div>
     </div>
   `
 })

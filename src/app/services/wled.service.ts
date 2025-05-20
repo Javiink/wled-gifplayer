@@ -60,7 +60,7 @@ export class WledService {
   playGif(filename: string): Observable<boolean> {
     const ip = this.getWledIp();
     if (!ip) {
-      this.modal.open(HtmlModalContentComponent, { html: 'Configure the WLED device IP address first.' });
+      this.modal.open(HtmlModalContentComponent, { html: '<p class="mx-3">Configure the WLED device IP address in <i class="fas fa-cog"></i> Settings first.</p> ' });
       return of(false);
     }
 
@@ -105,7 +105,7 @@ export class WledService {
   showMixedContentWarning() {
     const html = `
       <p class="text-2xl">Oops! 😕</p>
-      <p>The request to the device was blocked by your browser. This is likely caused by the mixed-content security policy.</p>
+      <p>The request couldn't reach your device. Please double-check that the IP address is correct and your device is reachable. If you keep receiving this error, it is likely caused by the mixed-content security policy.</p>
       <p class="mt-2 text-lg">❓ What now?</p>
       <p>You can try disabling this policy clicking on the site-settings icon (on the left of the URL top bar) > Site settings > Insecure content > Allow, and then refresh the page.</p>
       <p class="mt-2 text-lg">Why is it blocked? Is it safe to allow the content?</p>
