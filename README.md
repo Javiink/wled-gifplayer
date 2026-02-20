@@ -4,7 +4,7 @@
 <p align="center">A tool to send and play GIFs on your WLED-based LED 2D matrix
   <br />
   <br />
-  <a href="">Go to the app</a>
+  <a href="https://javiink.github.io/wled-gifplayer/">Go to the app</a>
   <br />
   <a href="https://github.com/javiink/wled-gifplayer/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
   ·
@@ -18,7 +18,7 @@
 
 ## 🚀 Usage
 
-Go to <a href="">the application page</a> and set up your device's IP address in the ⚙️ Settings button. Then you can play any GIF you like!
+Go to <a href="https://javiink.github.io/wled-gifplayer/">the application page</a> and set up your device's IP address in the ⚙️ Settings button. Then you can play any GIF you like!
 
 > [!IMPORTANT]  
 > Your device needs to run WLED v0.16.0+ to be able to play GIFs with this tool.
