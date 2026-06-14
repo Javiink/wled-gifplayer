@@ -7,7 +7,7 @@ import { GifFile } from '../models/gif.model';
 @Injectable({ providedIn: 'root' })
 export class GifService {
   private gifServer = 'https://tools.javi.ink/matriink'
-  private defaultEndpoint = this.gifServer + '/gif-collection.php'; // Cambiar por tu URL real
+  private defaultEndpoint = this.gifServer + '/gif-collection-dev.php';
   public gifsCache: GifFile[] = [];
 
   constructor(private http: HttpClient) { }
