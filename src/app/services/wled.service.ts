@@ -50,7 +50,7 @@ export class WledService {
     return from(fetch(gifUrl).then(res => res.blob()).then(blob => {
       const formData = new FormData();
       formData.append('data', blob, '/'+gifUrl.split('/').pop() || 'upload.gif');
-      return fetch(`http://${ip}/edit`, {
+      return fetch(`http://${ip}/upload`, {
         method: 'POST',
         body: formData
       });
@@ -97,9 +97,10 @@ export class WledService {
   }
 
   deleteOldGif(ip: string, filename: string): Observable<Object> {
-    const formData = new FormData();
-    formData.append('path', `/${filename}`);
-    return this.http.request('DELETE', `http://${ip}/edit`, {body: formData, responseType: 'text'});
+    return this.http.request('GET', `http://${ip}/edit`, {
+      params: { func: 'delete', path: encodeURI(`/${filename}`) },
+      responseType: "text"
+    });
   }
 
   showMixedContentWarning() {
