@@ -91,7 +91,8 @@ export class WledService {
             fx: 53,
             frz: false,
             sx: 128,
-            n: filename
+            n: filename,
+            ix: 0
           }
         };
         return this.http.post<void>(`http://${ip}/json/state`, payload).pipe(
