@@ -5,7 +5,12 @@ import { catchError, concatMap, delay, map, switchMap, tap, toArray } from 'rxjs
 import { GifService } from './gif.service';
 import { ModalService } from './modal.service';
 import { HtmlModalContentComponent } from '../components/html-modal-content-component';
-import { Playlist } from '../models/playlist.model';
+import {
+  Playlist,
+  PRESET_PREFIX,
+  PRESET_SLOT_END,
+  PRESET_SLOT_START
+} from '../models/playlist.model';
 import { GifFile } from '../models/gif.model';
 
 interface FilesystemInfo {
@@ -14,10 +19,20 @@ interface FilesystemInfo {
   freeBytes: number;
 }
 
+interface WledPresetEntry {
+  n?: string;
+  on?: boolean;
+  seg?: Record<string, unknown>[];
+  [key: string]: unknown;
+}
+
+type WledPresetsFile = Record<string, WledPresetEntry>;
+
 const UPLOAD_SETTLE_MS = 300;
 const UPLOAD_MAX_RETRIES = 2;
 /** Shown on the matrix while playlist GIFs are uploading. */
 const UPLOAD_PLACEHOLDER_FX = 183;
+const PRESETS_PATH = '/presets.json';
 
 @Injectable({ providedIn: 'root' })
 export class WledService {
@@ -26,7 +41,6 @@ export class WledService {
   currentGif$ = this.currentGifSubject.asObservable();
 
   private activeDeviceFiles: string[] = [];
-  private readonly PRESET_SLOT_START = 201;
 
   constructor(private http: HttpClient, private gifService: GifService, private modal: ModalService) { }
 
@@ -76,7 +90,8 @@ export class WledService {
 
     const previousFiles = [...this.activeDeviceFiles];
 
-    return this.uploadGifFile(ip, filename).pipe(
+    return this.cleanupGifPresets(ip).pipe(
+      switchMap(() => this.uploadGifFile(ip, filename)),
       switchMap(result => {
         if (!result.ok) {
           this.modal.open(HtmlModalContentComponent, {
@@ -170,8 +185,12 @@ export class WledService {
               });
             }
 
-            return this.saveAllPresets(ip, uploadedGifs).pipe(
+            return this.syncGifPresets(ip, uploadedGifs).pipe(
               switchMap(slots => {
+                if (!slots) {
+                  return of(false);
+                }
+
                 const durTenths = playlist.durationSeconds * 10;
                 return this.http.post<void>(`http://${ip}/json/state`, {
                   on: true,
@@ -300,17 +319,182 @@ export class WledService {
     );
   }
 
-  /** Save presets; matrix stays on upload placeholder between each save. */
-  private saveAllPresets(ip: string, gifs: GifFile[]): Observable<number[]> {
-    return from(gifs).pipe(
-      concatMap((gif, index) => {
-        const slot = this.PRESET_SLOT_START + index;
-        return this.savePresetQuiet(ip, gif.file, slot).pipe(
-          map(ok => (ok ? slot : -1))
+  private fetchPresetsJson(ip: string): Observable<WledPresetsFile> {
+    return this.http.get<WledPresetsFile>(`http://${ip}${PRESETS_PATH}`).pipe(
+      map(data => (data && typeof data === 'object' ? { ...data } : { '0': {} })),
+      catchError(() => of({ '0': {} } as WledPresetsFile))
+    );
+  }
+
+  private uploadPresetsJson(ip: string, presets: WledPresetsFile): Observable<boolean> {
+    const blob = new Blob([JSON.stringify(presets)], { type: 'application/json' });
+    const formData = new FormData();
+    formData.append('data', blob, PRESETS_PATH);
+
+    return from(
+      fetch(`http://${ip}/upload`, {
+        method: 'POST',
+        body: formData
+      })
+    ).pipe(
+      switchMap(response =>
+        from(response.text()).pipe(
+          map(text => ({ response, text }))
+        )
+      ),
+      map(({ response, text }) => {
+        const ok = response.ok && /UPLOADED/i.test(text);
+        if (!ok) {
+          console.warn('presets.json upload failed:', response.status, text);
+        }
+        return ok;
+      }),
+      catchError(err => {
+        console.warn('presets.json upload error:', err);
+        return of(false);
+      })
+    );
+  }
+
+  private removeGifplPresets(presets: WledPresetsFile): WledPresetsFile {
+    const result: WledPresetsFile = { ...presets };
+    for (const key of Object.keys(result)) {
+      const entry = result[key];
+      const name = typeof entry?.n === 'string' ? entry.n : '';
+      if (name.startsWith(PRESET_PREFIX)) {
+        delete result[key];
+      }
+    }
+    return result;
+  }
+
+  private isSlotFree(presets: WledPresetsFile, slot: number): boolean {
+    const entry = presets[String(slot)];
+    if (entry == null) return true;
+    return Object.keys(entry).length === 0;
+  }
+
+  private countFreeSlots(presets: WledPresetsFile): number {
+    let free = 0;
+    for (let slot = PRESET_SLOT_START; slot <= PRESET_SLOT_END; slot++) {
+      if (this.isSlotFree(presets, slot)) {
+        free++;
+      }
+    }
+    return free;
+  }
+
+  private assignPresetSlots(presets: WledPresetsFile, count: number): number[] {
+    const slots: number[] = [];
+    for (let slot = PRESET_SLOT_START; slot <= PRESET_SLOT_END && slots.length < count; slot++) {
+      if (this.isSlotFree(presets, slot)) {
+        slots.push(slot);
+      }
+    }
+    return slots;
+  }
+
+  private buildGifPreset(
+    filename: string,
+    slot: number,
+    segTemplate: Record<string, unknown> | null
+  ): WledPresetEntry {
+    const seg: Record<string, unknown> = {
+      id: 0,
+      fx: 53,
+      frz: false,
+      sx: 128,
+      ix: 0,
+      n: filename
+    };
+
+    if (segTemplate) {
+      if (typeof segTemplate['start'] === 'number') seg['start'] = segTemplate['start'];
+      if (typeof segTemplate['stop'] === 'number') seg['stop'] = segTemplate['stop'];
+      if (typeof segTemplate['len'] === 'number') seg['len'] = segTemplate['len'];
+    }
+
+    return {
+      n: `${PRESET_PREFIX}${slot}`,
+      on: true,
+      seg: [seg]
+    };
+  }
+
+  private getSegment0Template(ip: string): Observable<Record<string, unknown> | null> {
+    return this.http.get<any>(`http://${ip}/json/state`).pipe(
+      map(state => {
+        const seg = Array.isArray(state?.seg) ? state.seg[0] : null;
+        return seg && typeof seg === 'object' ? seg as Record<string, unknown> : null;
+      }),
+      catchError(() => of(null))
+    );
+  }
+
+  /**
+   * Sync gifpl-* presets into presets.json without activating each GIF.
+   * Returns slot IDs on success, or null if aborted (not enough slots / upload failed).
+   */
+  private syncGifPresets(ip: string, gifs: GifFile[]): Observable<number[] | null> {
+    return this.fetchPresetsJson(ip).pipe(
+      switchMap(presets => {
+        const cleaned = this.removeGifplPresets(presets);
+        const freeSlots = this.countFreeSlots(cleaned);
+
+        if (freeSlots < gifs.length) {
+          this.modal.open(HtmlModalContentComponent, {
+            html: '<p class="mx-3">Cannot play this playlist: not enough free preset slots on the WLED device. Free some presets (or reduce playlist size) and try again.</p>'
+          });
+          return of(null);
+        }
+
+        return this.getSegment0Template(ip).pipe(
+          switchMap(segTemplate => {
+            const slots = this.assignPresetSlots(cleaned, gifs.length);
+            const next: WledPresetsFile = { ...cleaned };
+
+            gifs.forEach((gif, index) => {
+              const slot = slots[index];
+              next[String(slot)] = this.buildGifPreset(gif.file, slot, segTemplate);
+            });
+
+            return this.uploadPresetsJson(ip, next).pipe(
+              map(ok => {
+                if (!ok) {
+                  this.modal.open(HtmlModalContentComponent, {
+                    html: '<p class="mx-3">Failed to update presets on the WLED device. Please try again.</p>'
+                  });
+                  return null;
+                }
+                return slots;
+              })
+            );
+          })
+        );
+      })
+    );
+  }
+
+  /** Remove all gifpl-* presets from the device without creating new ones. */
+  private cleanupGifPresets(ip: string): Observable<void> {
+    return this.fetchPresetsJson(ip).pipe(
+      switchMap(presets => {
+        const cleaned = this.removeGifplPresets(presets);
+        const hadGifpl = Object.keys(presets).some(key => {
+          const name = typeof presets[key]?.n === 'string' ? presets[key].n! : '';
+          return name.startsWith(PRESET_PREFIX);
+        });
+
+        if (!hadGifpl) {
+          return of(undefined);
+        }
+
+        return this.uploadPresetsJson(ip, cleaned).pipe(
+          map(() => undefined),
+          catchError(() => of(undefined))
         );
       }),
-      toArray(),
-      map(slots => slots.filter(s => s >= 0))
+      catchError(() => of(undefined))
     );
   }
 
@@ -404,26 +588,6 @@ export class WledService {
       }
       return '';
     }).filter(Boolean);
-  }
-
-  /** Save preset from current GIF segment state, then restore upload placeholder on the matrix. */
-  private savePresetQuiet(ip: string, filename: string, slot: number): Observable<boolean> {
-    return this.http.post<void>(`http://${ip}/json/state`, {
-      on: true,
-      seg: [{ id: 0, fx: 53, frz: false, sx: 128, n: filename }]
-    }).pipe(
-      switchMap(() =>
-        this.http.post<void>(`http://${ip}/json/state`, {
-          psave: slot,
-          n: `gifpl-${slot}`,
-          ib: true,
-          sb: true
-        })
-      ),
-      switchMap(() => this.setUploadPlaceholderEffect(ip)),
-      map(() => true),
-      catchError(() => of(false))
-    );
   }
 
   private setUploadPlaceholderEffect(ip: string): Observable<void> {

@@ -1,12 +1,13 @@
 import { Component, ElementRef, HostListener, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { GifFile } from '../models/gif.model';
-import { Playlist } from '../models/playlist.model';
+import { MAX_PLAYLIST_GIFS, Playlist } from '../models/playlist.model';
 import { GifService } from '../services/gif.service';
 import { WledService } from '../services/wled.service';
 import { FavoritesService } from '../services/favorites.service';
 import { PlaylistService } from '../services/playlist.service';
 import { ModalService } from '../services/modal.service';
 import { CreatePlaylistModalComponent } from './create-playlist-modal.component';
+import { HtmlModalContentComponent } from './html-modal-content-component';
 import { AsyncPipe, NgClass } from '@angular/common';
 
 @Component({
@@ -71,8 +72,10 @@ import { AsyncPipe, NgClass } from '@angular/common';
                     @for (pl of playlists; track pl.id) {
                       <button
                         (click)="addToPlaylist(pl.id, $event)"
-                        class="w-full px-3 py-1.5 text-left hover:bg-cyan-900 cursor-pointer truncate"
-                        [class.text-cyan-400]="isGifInPlaylist(pl.id)">
+                        class="w-full px-3 py-1.5 text-left hover:bg-cyan-900 cursor-pointer truncate disabled:opacity-40 disabled:cursor-not-allowed"
+                        [class.text-cyan-400]="isGifInPlaylist(pl.id)"
+                        [disabled]="!isGifInPlaylist(pl.id) && playlistService.isPlaylistFull(pl.id)"
+                        [title]="!isGifInPlaylist(pl.id) && playlistService.isPlaylistFull(pl.id) ? 'Playlist is full' : ''">
                         {{ pl.name }}
                         @if (isGifInPlaylist(pl.id)) {
                           <i class="fas fa-check ml-1 text-xs"></i>
@@ -205,7 +208,10 @@ export class GifItemComponent implements OnInit, OnDestroy {
 
   addToPlaylist(playlistId: string, event: Event): void {
     event.stopPropagation();
-    this.playlistService.addGif(playlistId, this.gif);
+    const result = this.playlistService.addGif(playlistId, this.gif);
+    if (result === 'full') {
+      this.showPlaylistFullWarning();
+    }
     this.closePlaylistMenu();
   }
 
@@ -216,8 +222,17 @@ export class GifItemComponent implements OnInit, OnDestroy {
       CreatePlaylistModalComponent
     );
     if (created) {
-      this.playlistService.addGif(created.id, this.gif);
+      const result = this.playlistService.addGif(created.id, this.gif);
+      if (result === 'full') {
+        this.showPlaylistFullWarning();
+      }
     }
+  }
+
+  private showPlaylistFullWarning(): void {
+    this.modal.open(HtmlModalContentComponent, {
+      html: `<p class="mx-3">This playlist already has the maximum of <strong>${MAX_PLAYLIST_GIFS}</strong> GIFs.</p>`
+    });
   }
 
   onPlay(): void {

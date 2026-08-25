@@ -1,13 +1,15 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { GifFile } from '../models/gif.model';
-import { Playlist } from '../models/playlist.model';
+import { MAX_PLAYLIST_GIFS, Playlist } from '../models/playlist.model';
 
 export interface CreatePlaylistParams {
   name: string;
   randomize: boolean;
   durationSeconds: number;
 }
+
+export type AddGifResult = 'added' | 'duplicate' | 'full' | 'not_found';
 
 @Injectable({ providedIn: 'root' })
 export class PlaylistService {
@@ -53,11 +55,17 @@ export class PlaylistService {
     return playlist?.gifs.some(g => g.file === gif.file) ?? false;
   }
 
-  addGif(playlistId: string, gif: GifFile): boolean {
+  isPlaylistFull(playlistId: string): boolean {
+    const playlist = this.getById(playlistId);
+    return (playlist?.gifs.length ?? 0) >= MAX_PLAYLIST_GIFS;
+  }
+
+  addGif(playlistId: string, gif: GifFile): AddGifResult {
     const playlists = this.getPlaylists();
     const index = playlists.findIndex(p => p.id === playlistId);
-    if (index === -1) return false;
-    if (playlists[index].gifs.some(g => g.file === gif.file)) return false;
+    if (index === -1) return 'not_found';
+    if (playlists[index].gifs.some(g => g.file === gif.file)) return 'duplicate';
+    if (playlists[index].gifs.length >= MAX_PLAYLIST_GIFS) return 'full';
 
     const updated = [...playlists];
     updated[index] = {
@@ -65,7 +73,7 @@ export class PlaylistService {
       gifs: [...updated[index].gifs, gif]
     };
     this.savePlaylists(updated);
-    return true;
+    return 'added';
   }
 
   removeGif(playlistId: string, gif: GifFile): void {
