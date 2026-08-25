@@ -49,4 +49,26 @@ export class GifService {
   findGifById(id: string){
     return this.gifsCache.find(g => g.file === id);
   }
+
+  /** Preloads GIFs into the browser cache (no extra network once cached). */
+  preloadGifs(filenames: string[]): Promise<void[]> {
+    return Promise.all(
+      filenames.map(file => {
+        const url = this.getGifUrl(file);
+        return new Promise<void>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error(`Failed to preload ${file}`));
+          img.src = url;
+        });
+      })
+    );
+  }
+
+  fetchGifBlob(filename: string): Promise<Blob> {
+    return fetch(this.getGifUrl(filename)).then(res => {
+      if (!res.ok) throw new Error(`Failed to fetch ${filename}`);
+      return res.blob();
+    });
+  }
 }

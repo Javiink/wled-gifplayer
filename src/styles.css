@@ -11,4 +11,5 @@ img.gif {
 }
 .gif-grid {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  overflow: visible;
 }
