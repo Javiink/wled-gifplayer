@@ -50,6 +50,41 @@ export class PlaylistService {
     return playlist;
   }
 
+  update(
+    id: string,
+    patch: Partial<Pick<Playlist, 'name' | 'randomize' | 'durationSeconds'>>
+  ): void {
+    const playlists = this.getPlaylists();
+    const index = playlists.findIndex(p => p.id === id);
+    if (index === -1) return;
+
+    const current = playlists[index];
+    const next: Playlist = { ...current };
+    let changed = false;
+
+    if (patch.name !== undefined) {
+      const trimmed = patch.name.trim();
+      if (trimmed && trimmed !== current.name) {
+        next.name = trimmed;
+        changed = true;
+      }
+    }
+    if (patch.randomize !== undefined && patch.randomize !== current.randomize) {
+      next.randomize = patch.randomize;
+      changed = true;
+    }
+    if (patch.durationSeconds !== undefined && patch.durationSeconds !== current.durationSeconds) {
+      next.durationSeconds = patch.durationSeconds;
+      changed = true;
+    }
+
+    if (!changed) return;
+
+    const updated = [...playlists];
+    updated[index] = next;
+    this.savePlaylists(updated);
+  }
+
   isGifInPlaylist(playlistId: string, gif: GifFile): boolean {
     const playlist = this.getById(playlistId);
     return playlist?.gifs.some(g => g.file === gif.file) ?? false;
@@ -83,5 +118,9 @@ export class PlaylistService {
         : p
     );
     this.savePlaylists(updated);
+  }
+
+  delete(id: string): void {
+    this.savePlaylists(this.getPlaylists().filter(p => p.id !== id));
   }
 }

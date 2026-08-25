@@ -22,7 +22,8 @@ import { Playlist } from '../models/playlist.model';
                   [playlist]="pl"
                   [gif]="getPreviewGif(pl)"
                   [showFavorite]="false"
-                  [showPlaylistPicker]="false">
+                  [showPlaylistPicker]="false"
+                  [showEdit]="true">
                 </app-gif-item>
                 <p class="text-center text-sm mt-1 truncate" [title]="pl.name">{{ pl.name }}</p>
               </div>

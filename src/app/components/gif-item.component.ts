@@ -1,4 +1,16 @@
-import { Component, ElementRef, HostListener, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostListener,
+  Input,
+  OnChanges,
+  OnDestroy,
+  OnInit,
+  Output,
+  SimpleChanges,
+  ViewChild
+} from '@angular/core';
 import { GifFile } from '../models/gif.model';
 import { MAX_PLAYLIST_GIFS, Playlist } from '../models/playlist.model';
 import { GifService } from '../services/gif.service';
@@ -57,6 +69,22 @@ import { AsyncPipe, NgClass } from '@angular/common';
               <i [ngClass]="{'fas text-red-600': isFavorite(gif)}" [class.far]="!isFavorite(gif)" class="fa-heart"></i>
             </button>
           }
+          @if (showEdit && mode === 'playlist' && playlist) {
+            <button
+              (click)="openEditPlaylist($event)"
+              title="Edit playlist"
+              class="pointer-events-auto absolute left-1 top-0 opacity-50 hover:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
+              <i class="fas fa-pencil"></i>
+            </button>
+          }
+          @if (showRemove) {
+            <button
+              (click)="onRemove($event)"
+              title="Remove from playlist"
+              class="pointer-events-auto absolute right-1 top-0 opacity-50 hover:opacity-100 sm:text-base text-xl text-red-400 text-shadow-sm text-shadow-black cursor-pointer">
+              <i class="fas fa-trash"></i>
+            </button>
+          }
           @if (showPlaylistPicker) {
             <div class="absolute right-1 top-0 pointer-events-auto" #playlistPickerRef>
               <button (click)="togglePlaylistMenu($event)" title="Add to playlist" class="opacity-50 hover:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
@@ -101,12 +129,15 @@ import { AsyncPipe, NgClass } from '@angular/common';
     }
   `
 })
-export class GifItemComponent implements OnInit, OnDestroy {
+export class GifItemComponent implements OnInit, OnChanges, OnDestroy {
   @Input({ required: true }) gif!: GifFile;
   @Input() mode: 'gif' | 'playlist' = 'gif';
   @Input() playlist?: Playlist;
   @Input() showFavorite = true;
   @Input() showPlaylistPicker = true;
+  @Input() showEdit = false;
+  @Input() showRemove = false;
+  @Output() remove = new EventEmitter<GifFile>();
 
   @ViewChild('playlistPickerRef') playlistPickerRef?: ElementRef<HTMLElement>;
   @ViewChild('playlistMenuRef') playlistMenuRef?: ElementRef<HTMLElement>;
@@ -117,6 +148,7 @@ export class GifItemComponent implements OnInit, OnDestroy {
   playlistMenuOpen = false;
   playlistMenuShiftRight = false;
   private previewInterval?: ReturnType<typeof setInterval>;
+  private lastPreviewKey = '';
 
   constructor(
     public gifService: GifService,
@@ -127,24 +159,59 @@ export class GifItemComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    if (this.mode === 'playlist' && this.playlist?.gifs.length) {
-      this.previewUrls = this.playlist.gifs.map(g => this.gifService.getGifUrl(g.file));
-      this.previewUrl = this.previewUrls[0];
-      this.gifService.preloadGifs(this.playlist.gifs.map(g => g.file)).catch(() => {});
+    this.setupPreview();
+  }
 
-      if (this.playlist.gifs.length > 1) {
-        this.previewInterval = setInterval(() => {
-          this.previewIndex = (this.previewIndex + 1) % this.previewUrls.length;
-        }, 1500);
-      }
-    } else {
-      this.previewUrl = this.gifService.getGifUrl(this.gif.file);
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['playlist'] || changes['gif'] || changes['mode']) {
+      this.setupPreview();
     }
   }
 
   ngOnDestroy(): void {
+    this.clearPreviewInterval();
+  }
+
+  private setupPreview(): void {
+    if (this.mode === 'playlist') {
+      const files = this.playlist?.gifs.map(g => g.file) ?? [];
+      const key = `playlist:${files.join('|')}`;
+      if (key === this.lastPreviewKey) return;
+      this.lastPreviewKey = key;
+
+      this.clearPreviewInterval();
+      this.previewIndex = 0;
+      this.previewUrls = [];
+      this.previewUrl = '';
+
+      if (!files.length) {
+        return;
+      }
+
+      this.previewUrls = files.map(f => this.gifService.getGifUrl(f));
+      this.previewUrl = this.previewUrls[0];
+      this.gifService.preloadGifs(files).catch(() => {});
+
+      if (files.length > 1) {
+        this.previewInterval = setInterval(() => {
+          this.previewIndex = (this.previewIndex + 1) % this.previewUrls.length;
+        }, 1500);
+      }
+      return;
+    }
+
+    const key = `gif:${this.gif?.file ?? ''}`;
+    if (key === this.lastPreviewKey) return;
+    this.lastPreviewKey = key;
+    this.clearPreviewInterval();
+    this.previewUrls = [];
+    this.previewUrl = this.gifService.getGifUrl(this.gif.file);
+  }
+
+  private clearPreviewInterval(): void {
     if (this.previewInterval) {
       clearInterval(this.previewInterval);
+      this.previewInterval = undefined;
     }
   }
 
@@ -227,6 +294,19 @@ export class GifItemComponent implements OnInit, OnDestroy {
         this.showPlaylistFullWarning();
       }
     }
+  }
+
+  async openEditPlaylist(event: Event): Promise<void> {
+    event.stopPropagation();
+    if (!this.playlist) return;
+    // Dynamic import avoids a circular dependency with EditPlaylistModalComponent.
+    const { EditPlaylistModalComponent } = await import('./edit-playlist-modal.component');
+    await this.modal.open(EditPlaylistModalComponent, { playlistId: this.playlist.id });
+  }
+
+  onRemove(event: Event): void {
+    event.stopPropagation();
+    this.remove.emit(this.gif);
   }
 
   private showPlaylistFullWarning(): void {
