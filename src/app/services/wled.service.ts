@@ -4,6 +4,8 @@ import { BehaviorSubject, forkJoin, from, Observable, of, timer } from 'rxjs';
 import { catchError, concatMap, delay, map, switchMap, tap, toArray } from 'rxjs/operators';
 import { GifService } from './gif.service';
 import { ModalService } from './modal.service';
+import { FavoritesService } from './favorites.service';
+import { PlaylistService } from './playlist.service';
 import { HtmlModalContentComponent } from '../components/html-modal-content-component';
 import {
   Playlist,
@@ -19,6 +21,11 @@ interface FilesystemInfo {
   freeBytes: number;
 }
 
+interface DeviceFile {
+  name: string;
+  size: number;
+}
+
 interface WledPresetEntry {
   n?: string;
   on?: boolean;
@@ -30,9 +37,19 @@ type WledPresetsFile = Record<string, WledPresetEntry>;
 
 const UPLOAD_SETTLE_MS = 300;
 const UPLOAD_MAX_RETRIES = 2;
-/** Shown on the matrix while playlist GIFs are uploading. */
+/** Extra free space to leave after ensuring room for uploads. */
+const FS_HEADROOM_BYTES = 8 * 1024;
+/** Effect shown on the matrix while playlist GIFs are uploading. */
 const UPLOAD_PLACEHOLDER_FX = 183;
 const PRESETS_PATH = '/presets.json';
+const SYSTEM_FILES = new Set([
+  'presets.json',
+  'cfg.json',
+  'wsec.json',
+  'presets.bak',
+  'cfg.bak',
+  'gifplayer.htm'
+]);
 
 @Injectable({ providedIn: 'root' })
 export class WledService {
@@ -40,9 +57,13 @@ export class WledService {
   private currentGifSubject = new BehaviorSubject<string | null>(null);
   currentGif$ = this.currentGifSubject.asObservable();
 
-  private activeDeviceFiles: string[] = [];
-
-  constructor(private http: HttpClient, private gifService: GifService, private modal: ModalService) { }
+  constructor(
+    private http: HttpClient,
+    private gifService: GifService,
+    private modal: ModalService,
+    private favoritesService: FavoritesService,
+    private playlistService: PlaylistService
+  ) { }
 
   setWledIp(ip: string) {
     localStorage.setItem(this.storedIpKey, ip);
@@ -88,14 +109,14 @@ export class WledService {
       return of(false);
     }
 
-    const previousFiles = [...this.activeDeviceFiles];
-
     return this.cleanupGifPresets(ip).pipe(
-      switchMap(() => this.uploadGifFile(ip, filename)),
+      switchMap(() => this.ensureGifOnDevice(ip, filename)),
       switchMap(result => {
         if (!result.ok) {
           this.modal.open(HtmlModalContentComponent, {
-            html: `<p class="mx-3">Failed to upload <strong>${filename}</strong> to the device.</p>`
+            html: result.reason === 'space'
+              ? `<p class="mx-3">Not enough free space on the device for <strong>${filename}</strong>. Free space by removing some favorites or playlist GIFs, or delete unused files from the device.</p>`
+              : `<p class="mx-3">Failed to upload <strong>${filename}</strong> to the device.</p>`
           });
           return of(false);
         }
@@ -115,16 +136,8 @@ export class WledService {
           catchError(() => of(false))
         );
       }),
-      switchMap(success => {
-        if (!success) {
-          return of(false);
-        }
-        const filesToDelete = previousFiles.filter(f => f !== filename);
-        return this.deleteDeviceFiles(filesToDelete).pipe(map(() => true));
-      }),
       tap(success => {
         if (success) {
-          this.activeDeviceFiles = [filename];
           this.updateCurrentGif();
         }
       })
@@ -146,15 +159,52 @@ export class WledService {
       ? this.shuffle([...playlist.gifs])
       : [...playlist.gifs];
 
-    const previousFiles = [...this.activeDeviceFiles];
+    const protectExtra = orderedGifs.map(g => g.file);
 
     return this.setUploadPlaceholderEffect(ip).pipe(
-      switchMap(() => this.getFilesystemInfo(ip)),
-      switchMap(fs => this.selectGifsThatFit(orderedGifs, fs.freeBytes)),
-      switchMap(({ gifs: toUpload, skipped }) => {
-        if (toUpload.length === 0) {
+      switchMap(() =>
+        forkJoin({
+          files: this.listDeviceFiles(ip),
+          fs: this.getFilesystemInfo(ip)
+        })
+      ),
+      switchMap(({ files, fs }) => {
+        const onDevice = new Set(files.map(f => f.name));
+        const alreadyOnDevice = orderedGifs.filter(g => onDevice.has(g.file));
+        const missing = orderedGifs.filter(g => !onDevice.has(g.file));
+
+        if (missing.length === 0) {
+          return of({
+            playable: orderedGifs,
+            skipped: [] as GifFile[],
+            toUpload: [] as GifFile[]
+          });
+        }
+
+        return this.getGifSizes(missing).pipe(
+          switchMap(sized => {
+            const totalNeeded = sized.reduce((sum, s) => sum + s.size, 0);
+            return this.ensureSpaceFor(ip, totalNeeded, protectExtra, files, fs.freeBytes).pipe(
+              map(space => {
+                const { fitting, skipped } = this.pickGifsThatFit(sized, space.freeBytes);
+                const playableSet = new Set([
+                  ...alreadyOnDevice.map(g => g.file),
+                  ...fitting.map(g => g.file)
+                ]);
+                return {
+                  playable: orderedGifs.filter(g => playableSet.has(g.file)),
+                  skipped: orderedGifs.filter(g => !playableSet.has(g.file)),
+                  toUpload: fitting
+                };
+              })
+            );
+          })
+        );
+      }),
+      switchMap(({ playable, skipped, toUpload }) => {
+        if (playable.length === 0) {
           this.modal.open(HtmlModalContentComponent, {
-            html: '<p class="mx-3">Not enough free space on the device to upload any GIF from this playlist.</p>'
+            html: '<p class="mx-3">Not enough free space on the device to play this playlist. Protected favorites and playlist GIFs may be filling storage.</p>'
           });
           return of(false);
         }
@@ -162,60 +212,42 @@ export class WledService {
         if (skipped.length > 0) {
           const names = skipped.map(g => g.file).join(', ');
           this.modal.open(HtmlModalContentComponent, {
-            html: `<p class="mx-3">Some GIFs were skipped due to limited device storage: <strong>${names}</strong>. Playing ${toUpload.length} of ${orderedGifs.length}.</p>`
+            html: `<p class="mx-3">Some GIFs were skipped due to limited device storage: <strong>${names}</strong>. Playing ${playable.length} of ${orderedGifs.length}.</p>`
           });
         }
 
-        return this.uploadAllGifs(ip, toUpload).pipe(
+        const uploadStep: Observable<GifFile[]> = toUpload.length
+          ? this.uploadAllGifs(ip, toUpload)
+          : of([]);
+
+        return uploadStep.pipe(
           switchMap(uploadedGifs => {
-            if (uploadedGifs.length === 0) {
-              this.modal.open(HtmlModalContentComponent, {
-                html: '<p class="mx-3">Could not upload any GIF from this playlist to the device. Please try again.</p>'
-              });
-              return of(false);
+            if (toUpload.length > 0 && uploadedGifs.length === 0) {
+              const onlyMissing = playable.every(g => toUpload.some(u => u.file === g.file));
+              if (onlyMissing) {
+                this.modal.open(HtmlModalContentComponent, {
+                  html: '<p class="mx-3">Could not upload any GIF from this playlist to the device. Please try again.</p>'
+                });
+                return of(false);
+              }
             }
 
-            if (uploadedGifs.length < toUpload.length) {
+            if (toUpload.length > 0 && uploadedGifs.length < toUpload.length) {
               const failed = toUpload
                 .filter(g => !uploadedGifs.some(u => u.file === g.file))
-                .map(g => g.file)
-                .join(', ');
+                .map(g => g.file);
               this.modal.open(HtmlModalContentComponent, {
-                html: `<p class="mx-3">Some uploads failed or could not be verified on the device: <strong>${failed}</strong>. Continuing with ${uploadedGifs.length} GIF(s).</p>`
+                html: `<p class="mx-3">Some uploads failed or could not be verified on the device: <strong>${failed.join(', ')}</strong>. Continuing with available GIF(s).</p>`
               });
+              const failedSet = new Set(failed);
+              const surviving = playable.filter(g => !failedSet.has(g.file));
+              if (surviving.length === 0) {
+                return of(false);
+              }
+              return this.startPlaylistPlayback(ip, surviving, playlist.durationSeconds);
             }
 
-            return this.syncGifPresets(ip, uploadedGifs).pipe(
-              switchMap(slots => {
-                if (!slots) {
-                  return of(false);
-                }
-
-                const durTenths = playlist.durationSeconds * 10;
-                return this.http.post<void>(`http://${ip}/json/state`, {
-                  on: true,
-                  playlist: {
-                    ps: slots,
-                    dur: slots.map(() => durTenths),
-                    repeat: 0,
-                    transition: 0
-                  }
-                }).pipe(
-                  switchMap(() => {
-                    const newFiles = uploadedGifs.map(g => g.file);
-                    const filesToDelete = previousFiles.filter(f => !newFiles.includes(f));
-                    return this.deleteDeviceFiles(filesToDelete).pipe(
-                      map(() => true),
-                      tap(() => {
-                        this.activeDeviceFiles = newFiles;
-                        this.currentGifSubject.next(newFiles[0]);
-                      })
-                    );
-                  }),
-                  catchError(() => of(false))
-                );
-              })
-            );
+            return this.startPlaylistPlayback(ip, playable, playlist.durationSeconds);
           })
         );
       }),
@@ -228,24 +260,149 @@ export class WledService {
     );
   }
 
+  private startPlaylistPlayback(
+    ip: string,
+    gifs: GifFile[],
+    durationSeconds: number
+  ): Observable<boolean> {
+    return this.syncGifPresets(ip, gifs).pipe(
+      switchMap(slots => {
+        if (!slots) {
+          return of(false);
+        }
+
+        const durTenths = durationSeconds * 10;
+        return this.http.post<void>(`http://${ip}/json/state`, {
+          on: true,
+          playlist: {
+            ps: slots,
+            dur: slots.map(() => durTenths),
+            repeat: 0,
+            transition: 0
+          }
+        }).pipe(
+          map(() => true),
+          tap(() => {
+            this.currentGifSubject.next(gifs[0].file);
+          }),
+          catchError(() => of(false))
+        );
+      })
+    );
+  }
+
   deleteOldGif(ip: string, filename: string): Observable<Object> {
-    const formData = new FormData();
-    formData.append('path', `/${filename}`);
     return this.http.request('GET', `http://${ip}/edit`, {
       params: { func: 'delete', path: encodeURI(`/${filename}`) },
-      responseType: "text"
+      responseType: 'text'
     });
   }
 
-  private deleteDeviceFiles(files: string[]): Observable<void> {
-    const ip = this.getWledIp();
-    if (!ip || files.length === 0) {
+  private deleteDeviceFiles(ip: string, files: string[]): Observable<void> {
+    if (files.length === 0) {
       return of(undefined);
     }
 
     return forkJoin(
       files.map(f => this.deleteOldGif(ip, f).pipe(catchError(() => of(null))))
     ).pipe(map(() => undefined));
+  }
+
+  private getProtectedFilenames(extra: string[] = []): Set<string> {
+    const protectedNames = new Set<string>(extra);
+    for (const fav of this.favoritesService.getFavorites()) {
+      protectedNames.add(fav.file);
+    }
+    for (const pl of this.playlistService.getPlaylists()) {
+      for (const gif of pl.gifs) {
+        protectedNames.add(gif.file);
+      }
+    }
+    return protectedNames;
+  }
+
+  /**
+   * Free enough space for bytesNeeded by deleting unprotected GIFs.
+   * Uses listed file sizes to estimate freed bytes; confirms with one /json/info call after deletes.
+   */
+  private ensureSpaceFor(
+    ip: string,
+    bytesNeeded: number,
+    protectExtra: string[],
+    deviceFiles: DeviceFile[],
+    freeBytes: number
+  ): Observable<{ ok: boolean; freeBytes: number }> {
+    const needed = bytesNeeded + FS_HEADROOM_BYTES;
+    if (freeBytes >= needed) {
+      return of({ ok: true, freeBytes });
+    }
+
+    const protectedNames = this.getProtectedFilenames(protectExtra);
+    const candidates = deviceFiles
+      .filter(f => this.isGifFilename(f.name) && !protectedNames.has(f.name))
+      .sort((a, b) => b.size - a.size);
+
+    let projectedFree = freeBytes;
+    const toDelete: string[] = [];
+    for (const file of candidates) {
+      if (projectedFree >= needed) break;
+      toDelete.push(file.name);
+      projectedFree += file.size;
+    }
+
+    if (toDelete.length === 0) {
+      return of({ ok: freeBytes >= needed, freeBytes });
+    }
+
+    return this.deleteDeviceFiles(ip, toDelete).pipe(
+      switchMap(() => this.getFilesystemInfo(ip)),
+      map(fs => ({
+        ok: fs.freeBytes >= needed,
+        freeBytes: fs.freeBytes
+      }))
+    );
+  }
+
+  /**
+   * Ensure a GIF is present on the device: skip upload if cached, otherwise free space and upload.
+   */
+  private ensureGifOnDevice(
+    ip: string,
+    filename: string
+  ): Observable<{ ok: boolean; reason?: 'space' | 'upload' }> {
+    return forkJoin({
+      files: this.listDeviceFiles(ip),
+      fs: this.getFilesystemInfo(ip)
+    }).pipe(
+      switchMap(({ files, fs }) => {
+        if (files.some(f => f.name === filename)) {
+          return of({ ok: true as const });
+        }
+
+        return this.getGifSize(filename).pipe(
+          switchMap(size => {
+            if (size <= 0) {
+              return of({ ok: false as const, reason: 'upload' as const });
+            }
+
+            return this.ensureSpaceFor(ip, size, [filename], files, fs.freeBytes).pipe(
+              switchMap(space => {
+                if (!space.ok) {
+                  return of({ ok: false as const, reason: 'space' as const });
+                }
+                return this.uploadGifFile(ip, filename).pipe(
+                  map(result =>
+                    result.ok
+                      ? { ok: true as const }
+                      : { ok: false as const, reason: 'upload' as const }
+                  )
+                );
+              })
+            );
+          })
+        );
+      })
+    );
   }
 
   private getFilesystemInfo(ip: string): Observable<FilesystemInfo> {
@@ -276,33 +433,45 @@ export class WledService {
     );
   }
 
-  private selectGifsThatFit(gifs: GifFile[], freeBytes: number): Observable<{ gifs: GifFile[]; skipped: GifFile[] }> {
+  private getGifSizes(gifs: GifFile[]): Observable<{ gif: GifFile; size: number }[]> {
     return from(gifs).pipe(
-      concatMap(gif =>
-        this.getGifSize(gif.file).pipe(map(size => ({ gif, size })))
-      ),
-      toArray(),
-      map(items => {
-        const fitting: GifFile[] = [];
-        const skipped: GifFile[] = [];
-        let remaining = freeBytes;
-
-        for (const { gif, size } of items) {
-          if (size > 0 && size <= remaining) {
-            fitting.push(gif);
-            remaining -= size;
-          } else {
-            skipped.push(gif);
-          }
-        }
-
-        return { gifs: fitting, skipped };
-      })
+      concatMap(gif => this.getGifSize(gif.file).pipe(map(size => ({ gif, size })))),
+      toArray()
     );
   }
 
-  /** Upload all GIFs sequentially; matrix stays on upload placeholder effect. */
+  private pickGifsThatFit(
+    sized: { gif: GifFile; size: number }[],
+    freeBytes: number
+  ): { fitting: GifFile[]; skipped: GifFile[] } {
+    const fitting: GifFile[] = [];
+    const skipped: GifFile[] = [];
+    let remaining = Math.max(0, freeBytes - FS_HEADROOM_BYTES);
+
+    for (const { gif, size } of sized) {
+      if (size > 0 && size <= remaining) {
+        fitting.push(gif);
+        remaining -= size;
+      } else {
+        skipped.push(gif);
+      }
+    }
+
+    return { fitting, skipped };
+  }
+
+  /** Upload all GIFs sequentially; verify batch once at the end and retry missing files. */
   private uploadAllGifs(ip: string, gifs: GifFile[]): Observable<GifFile[]> {
+    return this.uploadGifBatch(ip, gifs).pipe(
+      switchMap(() => this.verifyAndRetryUploads(ip, gifs, 0))
+    );
+  }
+
+  private uploadGifBatch(ip: string, gifs: GifFile[]): Observable<GifFile[]> {
+    if (gifs.length === 0) {
+      return of([]);
+    }
+
     return from(gifs).pipe(
       concatMap(gif =>
         this.uploadGifFile(ip, gif.file).pipe(
@@ -316,6 +485,36 @@ export class WledService {
       ),
       toArray(),
       map(results => results.filter((g): g is GifFile => g !== null))
+    );
+  }
+
+  private verifyAndRetryUploads(
+    ip: string,
+    gifs: GifFile[],
+    verifyAttempt: number
+  ): Observable<GifFile[]> {
+    return timer(UPLOAD_SETTLE_MS).pipe(
+      switchMap(() => this.listDeviceFiles(ip)),
+      switchMap(files => {
+        const verified = gifs.filter(g => this.isGifFileOnDevice(files, g.file));
+        const missing = gifs.filter(g => !this.isGifFileOnDevice(files, g.file));
+
+        if (missing.length === 0) {
+          return of(verified);
+        }
+
+        if (verifyAttempt >= UPLOAD_MAX_RETRIES) {
+          console.warn(
+            'Playlist upload verification failed:',
+            missing.map(g => g.file)
+          );
+          return of(verified);
+        }
+
+        return this.uploadGifBatch(ip, missing).pipe(
+          switchMap(() => this.verifyAndRetryUploads(ip, gifs, verifyAttempt + 1))
+        );
+      })
     );
   }
 
@@ -525,20 +724,7 @@ export class WledService {
           console.warn(`Upload failed for ${filename}:`, response.status, text);
           return of({ ok: false });
         }
-        return timer(UPLOAD_SETTLE_MS).pipe(
-          switchMap(() => this.verifyFileOnDevice(ip, filename)),
-          switchMap(exists => {
-            if (!exists && attempt < UPLOAD_MAX_RETRIES) {
-              return timer(500).pipe(
-                switchMap(() => this.uploadGifFile(ip, filename, attempt + 1))
-              );
-            }
-            if (!exists) {
-              console.warn(`Upload reported success but file not found: ${filename}`);
-            }
-            return of({ ok: exists });
-          })
-        );
+        return of({ ok: true });
       }),
       catchError(err => {
         console.warn(`Upload error for ${filename}:`, err);
@@ -552,13 +738,11 @@ export class WledService {
     );
   }
 
-  private verifyFileOnDevice(ip: string, filename: string): Observable<boolean> {
-    return this.listDeviceFiles(ip).pipe(
-      map(files => files.some(f => f === filename || f.endsWith('/' + filename) || f.endsWith(filename)))
-    );
+  private isGifFileOnDevice(files: DeviceFile[], filename: string): boolean {
+    return files.some(f => f.name === filename || f.name.endsWith('/' + filename));
   }
 
-  private listDeviceFiles(ip: string): Observable<string[]> {
+  private listDeviceFiles(ip: string): Observable<DeviceFile[]> {
     return this.http.get<unknown>(`http://${ip}/edit`, {
       params: { list: '/' },
       responseType: 'json' as 'json'
@@ -579,15 +763,29 @@ export class WledService {
     );
   }
 
-  private parseFileList(data: unknown): string[] {
+  private parseFileList(data: unknown): DeviceFile[] {
     if (!Array.isArray(data)) return [];
-    return data.map(entry => {
-      if (typeof entry === 'string') return entry.replace(/^\//, '');
-      if (entry && typeof entry === 'object' && 'name' in entry) {
-        return String((entry as { name: string }).name).replace(/^\//, '');
-      }
-      return '';
-    }).filter(Boolean);
+
+    const files: DeviceFile[] = [];
+    for (const entry of data) {
+      if (!entry || typeof entry !== 'object' || !('name' in entry)) continue;
+
+      const raw = entry as { name: string; size?: number; type?: string };
+      if (raw.type && raw.type !== 'file') continue;
+
+      const name = String(raw.name).replace(/^\//, '');
+      if (!name || SYSTEM_FILES.has(name.toLowerCase())) continue;
+
+      files.push({
+        name,
+        size: typeof raw.size === 'number' ? raw.size : 0
+      });
+    }
+    return files;
+  }
+
+  private isGifFilename(name: string): boolean {
+    return name.toLowerCase().endsWith('.gif');
   }
 
   private setUploadPlaceholderEffect(ip: string): Observable<void> {
