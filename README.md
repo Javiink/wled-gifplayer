@@ -47,8 +47,8 @@ Don't forget to give the project a star! 🌟💖
 
 - [x] Delete old GIF from WLED to save space
 - [x] Add favorites management
-- [ ] Playback controls (pause/play/stop, turn off, brightness...)
-- [ ] Ability to create playlists
+- [ ] Playback controls (pause/play/stop, turn on/off, brightness...)
+- [x] Ability to create playlists
 - [ ] Ability to filter by predefined tags
 
 ## 💡 Inspiration

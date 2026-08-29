@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 // Components
 import { GifGridInfiniteComponent } from './components/gif-grid-infinite.component';
 import { FavoritesComponent } from './components/favorites.component';
+import { PlaylistsComponent } from './components/playlists.component';
 import { SettingsComponent } from './components/settings.component';
 import { CurrentGifComponent } from './components/current-gif.component';
 import { ModalService } from './services/modal.service';
@@ -17,6 +18,7 @@ import { ModalService } from './services/modal.service';
     FormsModule,
     GifGridInfiniteComponent,
     FavoritesComponent,
+    PlaylistsComponent,
     CurrentGifComponent
   ],
   templateUrl: 'app.component.html'
