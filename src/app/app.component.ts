@@ -9,6 +9,7 @@ import { PlaylistsComponent } from './components/playlists.component';
 import { SettingsComponent } from './components/settings.component';
 import { CurrentGifComponent } from './components/current-gif.component';
 import { WelcomeToastComponent } from './components/welcome-toast.component';
+import { AppNavBarComponent } from './components/app-nav-bar.component';
 import { ModalService } from './services/modal.service';
 import { WelcomeService } from './services/welcome.service';
 
@@ -22,7 +23,8 @@ import { WelcomeService } from './services/welcome.service';
     FavoritesComponent,
     PlaylistsComponent,
     CurrentGifComponent,
-    WelcomeToastComponent
+    WelcomeToastComponent,
+    AppNavBarComponent
   ],
   templateUrl: 'app.component.html'
 })
@@ -41,6 +43,16 @@ export class AppComponent implements OnInit {
   onWelcomeDismiss(): void {
     this.welcome.dismiss();
     this.showWelcomeToast = false;
+  }
+
+  showWelcome(): void {
+    this.showWelcomeToast = true;
+  }
+
+  onNavAnchorClick(): void {
+    if (this.showWelcomeToast) {
+      this.onWelcomeDismiss();
+    }
   }
 
   async openConfigDialog() {

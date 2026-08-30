@@ -1,26 +1,33 @@
 @if (showWelcomeToast) {
-<app-welcome-toast (dismiss)="onWelcomeDismiss()" (openSettings)="openConfigDialog()" />
+  <app-welcome-toast
+    (dismiss)="onWelcomeDismiss()"
+    (openSettings)="openConfigDialog()"
+  />
 }
 
-<div class="container mx-auto p-4">
-  <h1 class="text-3xl text-center font-bold mt-2 mb-5">WLED Matrix GIF repository</h1>
+<app-nav-bar
+  (settingsClick)="openConfigDialog()"
+  (helpClick)="showWelcome()"
+  (anchorClick)="onNavAnchorClick()"
+/>
 
+<div id="top" class="container mx-auto px-3 py-4 sm:p-4">
   <div class="flex flex-wrap sm:flex-nowrap items-center sm:justify-start gap-8 w-full mb-6">
     <div class="grow min-w-48 max-w-md sm:max-w-60">
       <app-current-gif></app-current-gif>
     </div>
-    <div class="ml-auto">
-      <button (click)="openConfigDialog()"
-        class="px-4 py-2 bg-cyan-500 shadow-lg shadow-cyan-500/50 rounded cursor-pointer"><i class="fas fa-cog"></i>
-        Settings</button>
-    </div>
   </div>
 
-  <app-favorites></app-favorites>
+  <section id="favorites" class="scroll-mt-20 sm:scroll-mt-16">
+    <app-favorites></app-favorites>
+  </section>
 
-  <app-playlists></app-playlists>
+  <section id="playlists" class="scroll-mt-20 sm:scroll-mt-16">
+    <app-playlists></app-playlists>
+  </section>
 
-  <h2 class="text-xl font-semibold mb-2"><i class="fas fa-images text-cyan-800"></i> All animations</h2>
-  <app-gif-grid-infinite></app-gif-grid-infinite>
-
+  <section id="all-animations" class="scroll-mt-20 sm:scroll-mt-16">
+    <h2 class="text-xl font-semibold mb-2"><i class="fas fa-images text-cyan-500"></i> All animations</h2>
+    <app-gif-grid-infinite></app-gif-grid-infinite>
+  </section>
 </div>
