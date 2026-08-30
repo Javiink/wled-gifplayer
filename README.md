@@ -18,7 +18,10 @@
 
 ## 🚀 Usage
 
-Go to <a href="https://javiink.github.io/wled-gifplayer/">the application page</a> and set up your device's IP address in the ⚙️ Settings button. Then you can play any GIF you like!
+Go to <a href="https://javiink.github.io/wled-gifplayer/">the application page</a> and set up your device's IP address in the ⚙️ Settings button. You can type the IP manually or click **Scan** to discover WLED devices configured as 2D matrices on your local network. Then you can play any GIF you like!
+
+> [!NOTE]
+> **Network scan:** Discovery only runs when you click Scan — it is never automatic. If you already have a device configured, the scan uses it first to find other WLED nodes and then scans your local subnet. Only 2D matrix devices appear in the list. The scan may take a few seconds and only covers your local subnet.
 
 > [!IMPORTANT]  
 > Your device needs to run WLED v0.16.0+ to be able to play GIFs with this tool.
