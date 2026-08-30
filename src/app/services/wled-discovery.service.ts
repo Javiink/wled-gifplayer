@@ -210,9 +210,7 @@ export class WledDiscoveryService {
       }
 
       let settled = false;
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-      });
+      const pc = new RTCPeerConnection({ iceServers: [] });
 
       const finish = () => {
         if (settled) return;
