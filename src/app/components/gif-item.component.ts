@@ -28,10 +28,12 @@ import { AsyncPipe, NgClass } from '@angular/common';
   imports: [NgClass, AsyncPipe],
   template: `
     <div
-      class="relative group aspect-square rounded-xs drop-shadow-xl drop-shadow-cyan-900 hover:ring-1 hover:ring-cyan-300 hover:drop-shadow-cyan-600 transition-shadow gif-item"
+      tabindex="0"
+      class="relative group aspect-square rounded-xs drop-shadow-xl drop-shadow-cyan-900 hover:ring-1 hover:ring-cyan-300 hover:drop-shadow-cyan-600 transition-shadow outline-none focus-visible:ring-1 focus-visible:ring-cyan-300 gif-item"
+      [class.revealed]="mobileControlsVisible || playlistMenuOpen"
       [class.z-[200]]="playlistMenuOpen"
       (mouseleave)="onTileMouseLeave()">
-      <div class="absolute inset-0 overflow-hidden rounded-xs cursor-pointer" (click)="onPlay()">
+      <div class="absolute inset-0 overflow-hidden rounded-xs cursor-pointer" (click)="onImageAreaClick($event)">
         @if (mode === 'playlist' && !(playlist?.gifs?.length)) {
           <div class="size-full flex items-center justify-center bg-cyan-950 text-cyan-600">
             <i class="fas fa-list fa-2x"></i>
@@ -48,24 +50,22 @@ import { AsyncPipe, NgClass } from '@angular/common';
         } @else {
           <img [src]="previewUrl" class="size-full gif">
         }
-        <div class="size-full absolute top-0 left-0 bg-black opacity-0 sm:group-hover:opacity-20 pointer-events-none"></div>
+        <div class="size-full absolute top-0 left-0 bg-black opacity-0 max-sm:group-[.revealed]:opacity-20 sm:group-hover:opacity-20 pointer-events-none"></div>
       </div>
 
       <div
-        class="absolute inset-0 p-1 transition-opacity pointer-events-none"
-        [class.opacity-90]="playlistMenuOpen"
-        [class.sm:opacity-0]="!playlistMenuOpen"
-        [class.sm:group-hover:opacity-90]="!playlistMenuOpen">
-        <div class="relative flex size-full items-center justify-center pointer-events-none">
+        class="absolute inset-0 p-1 transition-opacity pointer-events-none opacity-0 max-sm:group-[.revealed]:opacity-90 sm:group-hover:opacity-90"
+        [class.!opacity-90]="playlistMenuOpen">
+        <div class="relative flex size-full items-center justify-center pointer-events-none max-sm:group-[.revealed]:pointer-events-auto sm:group-hover:pointer-events-auto">
           <button
             (click)="onPlay(); $event.stopPropagation()"
             [disabled]="mode === 'playlist' && !(playlist?.gifs?.length)"
             [title]="mode === 'playlist' && !(playlist?.gifs?.length) ? 'Playlist is empty' : 'Play'"
-            class="pointer-events-auto opacity-40 hover:opacity-100 text-white text-shadow-lg text-shadow-black cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+            class="opacity-40 hover:opacity-100 group-[.revealed]:opacity-100 text-white text-shadow-lg text-shadow-black cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
             <i class="fas fa-play fa-2x sm:text-5xl!"></i>
           </button>
           @if (showFavorite) {
-            <button (click)="toggleFavorite(gif); $event.stopPropagation()" title="Favorite" class="pointer-events-auto absolute left-1 top-0 opacity-50 hover:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
+            <button (click)="toggleFavorite(gif); $event.stopPropagation()" title="Favorite" class="absolute left-1 top-0 opacity-50 hover:opacity-100 group-[.revealed]:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
               <i [ngClass]="{'fas text-red-600': isFavorite(gif)}" [class.far]="!isFavorite(gif)" class="fa-heart"></i>
             </button>
           }
@@ -73,7 +73,7 @@ import { AsyncPipe, NgClass } from '@angular/common';
             <button
               (click)="openEditPlaylist($event)"
               title="Edit playlist"
-              class="pointer-events-auto absolute left-1 top-0 opacity-50 hover:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
+              class="absolute left-1 top-0 opacity-50 hover:opacity-100 group-[.revealed]:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
               <i class="fas fa-pencil"></i>
             </button>
           }
@@ -81,13 +81,13 @@ import { AsyncPipe, NgClass } from '@angular/common';
             <button
               (click)="onRemove($event)"
               title="Remove from playlist"
-              class="pointer-events-auto absolute right-1 top-0 opacity-50 hover:opacity-100 sm:text-base text-xl text-red-400 text-shadow-sm text-shadow-black cursor-pointer">
+              class="absolute right-1 top-0 opacity-50 hover:opacity-100 group-[.revealed]:opacity-100 sm:text-base text-xl text-red-400 text-shadow-sm text-shadow-black cursor-pointer">
               <i class="fas fa-trash"></i>
             </button>
           }
           @if (showPlaylistPicker) {
-            <div class="absolute right-1 top-0 pointer-events-auto" #playlistPickerRef>
-              <button (click)="togglePlaylistMenu($event)" title="Add to playlist" class="opacity-50 hover:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
+            <div class="absolute right-1 top-0" #playlistPickerRef>
+              <button (click)="togglePlaylistMenu($event)" title="Add to playlist" class="opacity-50 hover:opacity-100 group-[.revealed]:opacity-100 sm:text-base text-xl text-white text-shadow-sm text-shadow-black cursor-pointer">
                 <i class="fas fa-list-ul"></i>
               </button>
               @if (playlistMenuOpen) {
@@ -147,6 +147,7 @@ export class GifItemComponent implements OnInit, OnChanges, OnDestroy {
   previewIndex = 0;
   playlistMenuOpen = false;
   playlistMenuShiftRight = false;
+  mobileControlsVisible = false;
   private previewInterval?: ReturnType<typeof setInterval>;
   private lastPreviewKey = '';
 
@@ -155,7 +156,8 @@ export class GifItemComponent implements OnInit, OnChanges, OnDestroy {
     private wledService: WledService,
     public favoritesService: FavoritesService,
     public playlistService: PlaylistService,
-    private modal: ModalService
+    private modal: ModalService,
+    private elementRef: ElementRef<HTMLElement>
   ) {}
 
   ngOnInit(): void {
@@ -224,15 +226,21 @@ export class GifItemComponent implements OnInit, OnChanges, OnDestroy {
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
-    if (!this.playlistMenuOpen) return;
-    const el = this.playlistPickerRef?.nativeElement;
-    if (el && !el.contains(event.target as Node)) {
-      this.closePlaylistMenu();
+    const el = this.elementRef.nativeElement;
+    if (this.playlistMenuOpen) {
+      const picker = this.playlistPickerRef?.nativeElement;
+      if (picker && !picker.contains(event.target as Node)) {
+        this.closePlaylistMenu();
+      }
+    }
+    if (this.mobileControlsVisible && !el.contains(event.target as Node)) {
+      this.mobileControlsVisible = false;
     }
   }
 
   onTileMouseLeave(): void {
     this.closePlaylistMenu();
+    this.mobileControlsVisible = false;
   }
 
   private closePlaylistMenu(): void {
@@ -315,6 +323,23 @@ export class GifItemComponent implements OnInit, OnChanges, OnDestroy {
     });
   }
 
+  onImageAreaClick(event: Event): void {
+    if (!this.isMobileViewport()) {
+      this.onPlay();
+      return;
+    }
+    if (!this.mobileControlsVisible) {
+      event.stopPropagation();
+      this.mobileControlsVisible = true;
+      return;
+    }
+    this.onPlay();
+  }
+
+  private isMobileViewport(): boolean {
+    return window.matchMedia('(max-width: 639px)').matches;
+  }
+
   onPlay(): void {
     if (this.mode === 'playlist' && this.playlist) {
       if (!this.playlist.gifs.length) return;
@@ -322,5 +347,6 @@ export class GifItemComponent implements OnInit, OnChanges, OnDestroy {
     } else {
       this.wledService.playGif(this.gif.file).subscribe();
     }
+    this.mobileControlsVisible = false;
   }
 }
