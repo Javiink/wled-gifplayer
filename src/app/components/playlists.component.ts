@@ -13,7 +13,7 @@ import { Playlist } from '../models/playlist.model';
     @if (playlistService.playlists$ | async; as playlists) {
       @if (playlists.length > 0) {
         <div class="mb-6">
-          <h2 class="text-xl font-semibold mb-2"><i class="fas fa-list text-cyan-500"></i> Playlists</h2>
+          <h2 class="text-xl font-semibold mb-2"><i class="fas fa-list text-lime-400"></i> Playlists</h2>
           <div class="grid gap-4 gif-grid">
             @for (pl of playlists; track pl.id) {
               <div class="flex flex-col">
@@ -25,7 +25,7 @@ import { Playlist } from '../models/playlist.model';
                   [showPlaylistPicker]="false"
                   [showEdit]="true">
                 </app-gif-item>
-                <p class="text-center text-sm mt-1 truncate" [title]="pl.name">{{ pl.name }}</p>
+                <p class="text-center text-sm mt-1 truncate z-[1]" [title]="pl.name">{{ pl.name }}</p>
               </div>
             }
           </div>

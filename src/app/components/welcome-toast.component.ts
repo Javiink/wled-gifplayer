@@ -38,6 +38,8 @@ import { Component, output } from '@angular/core';
             version 0.16+.
           </p>
           <p>GIF animations are updated daily.</p>
+          <p>This project is not affiliated to nor endorsed by the WLED team.</p>
+          <p><a href="https://github.com/javiink/wled-gifplayer" target="_blank" class="underline text-cyan-400"><i class="fa-brands fa-github"></i> Check out this project on GitHub.</a></p>
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2 mt-4">

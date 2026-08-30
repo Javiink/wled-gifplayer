@@ -9,6 +9,7 @@ import { GifItemComponent } from './gif-item.component';
   imports: [GifItemComponent],
   template: `
     <div>
+      <h2 class="text-xl font-semibold mb-2"><i class="fas fa-images text-cyan-500"></i> All animations</h2>
       <div class="grid gap-4 gif-grid">
         @for (gif of displayedGifs; track gif.file) {
           <app-gif-item [gif]="gif"></app-gif-item>
