@@ -12,13 +12,13 @@ import { PlaylistParamsFormComponent } from './playlist-params-form.component';
   imports: [GifItemComponent, PlaylistParamsFormComponent],
   template: `
     @if (playlist) {
-      <div class="w-64 sm:w-96 md:w-2xl">
+      <div class="flex flex-col w-64 max-h-[90vh] sm:w-96 md:w-2xl">
         <p class="mb-4 text-xl pr-6"><i class="fas fa-pencil"></i> Edit playlist</p>
 
         <!-- Top: preview + form -->
         <div class="flex flex-col sm:flex-row gap-4 sm:items-stretch mb-5">
           <!-- Explicit size required: gif-item content is absolutely positioned (no intrinsic size). -->
-          <div class="preview-slot mx-auto sm:mx-0 size-48 shrink-0 self-center">
+          <div class="preview-slot mx-auto sm:mx-0 hidden md:block md:size-48 shrink-0 self-center">
             <app-gif-item
               class="block size-full"
               mode="playlist"
@@ -53,14 +53,14 @@ import { PlaylistParamsFormComponent } from './playlist-params-form.component';
         </div>
 
         <!-- Bottom: GIF grid -->
-        <div>
+        <div class="overflow-y-auto px-5 pb-7 pt-1 -mx-5">
           <p class="mb-2 text-sm text-cyan-300">
             GIFs ({{ playlist.gifs.length }})
           </p>
           @if (playlist.gifs.length === 0) {
             <p class="text-sm text-cyan-400/70">No GIFs in this playlist yet.</p>
           } @else {
-            <div class="overflow-visible">
+            <div class="">
               <div class="grid gap-4 gif-grid">
                 @for (gif of playlist.gifs; track gif.file) {
                   <app-gif-item
