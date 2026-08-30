@@ -5,13 +5,16 @@ import {
   defer,
   EMPTY,
   from,
+  merge,
   Observable,
-  of
+  of,
+  Subject
 } from 'rxjs';
 import {
   catchError,
   concatMap,
   filter,
+  finalize,
   map,
   mergeMap,
   takeUntil,
@@ -51,6 +54,15 @@ interface WledNodesResponse {
   nodes?: WledNode[];
 }
 
+interface DiscoveryContext {
+  foundIps: Set<string>;
+  nodesLookupSucceeded: boolean;
+  nodesLookupInProgress: boolean;
+  triedNodeSeeds: Set<string>;
+  pendingNodeSeeds: string[];
+  nodesSubject: Subject<WledMatrixDevice>;
+}
+
 const PROBE_TIMEOUT_MS = 1500;
 const SCAN_CONCURRENCY = 10;
 const WEBRTC_TIMEOUT_MS = 2000;
@@ -83,14 +95,26 @@ function isPrivateSubnetBase(base: string): boolean {
   return subnetFromPrivateIp(`${base}.1`) !== null;
 }
 
+function createDiscoveryContext(foundIps: Set<string>): DiscoveryContext {
+  return {
+    foundIps,
+    nodesLookupSucceeded: false,
+    nodesLookupInProgress: false,
+    triedNodeSeeds: new Set(),
+    pendingNodeSeeds: [],
+    nodesSubject: new Subject<WledMatrixDevice>()
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class WledDiscoveryService {
   constructor(private http: HttpClient) {}
 
   discover(seedIp: string | null, abort$: Observable<void>): Observable<DiscoveryEvent> {
     const foundIps = new Set<string>();
+    const ctx = createDiscoveryContext(foundIps);
 
-    const dedupe = (source: Observable<WledMatrixDevice>): Observable<DiscoveryEvent> =>
+    const toEvents = (source: Observable<WledMatrixDevice>): Observable<DiscoveryEvent> =>
       source.pipe(
         filter(device => {
           if (foundIps.has(device.ip)) return false;
@@ -103,22 +127,21 @@ export class WledDiscoveryService {
     const normalizedSeed = seedIp && isPrivateIp(seedIp) ? seedIp : null;
 
     const seedPhase$ = normalizedSeed
-      ? dedupe(this.discoverFromSeed(normalizedSeed, abort$))
+      ? toEvents(this.discoverFromSeed(normalizedSeed, ctx, abort$))
       : EMPTY;
 
-    const subnetPhase$ = from(this.getLocalSubnets()).pipe(
+    const subnetScan$ = from(this.getLocalSubnets()).pipe(
       concatMap(subnets =>
         from(subnets).pipe(
-          concatMap(base => this.scanSubnet(base, foundIps, abort$)),
+          concatMap(base => this.scanSubnet(base, ctx, abort$)),
           takeUntil(abort$)
         )
       ),
-      filter(device => {
-        if (foundIps.has(device.ip)) return false;
-        foundIps.add(device.ip);
-        return true;
-      }),
-      map(device => ({ kind: 'device' as const, device }))
+      finalize(() => ctx.nodesSubject.complete())
+    );
+
+    const subnetPhase$ = toEvents(
+      merge(subnetScan$, ctx.nodesSubject.asObservable()).pipe(takeUntil(abort$))
     );
 
     const complete$ = defer(() => of({ kind: 'complete' as const }));
@@ -129,67 +152,168 @@ export class WledDiscoveryService {
     );
   }
 
-  private discoverFromSeed(seedIp: string, abort$: Observable<void>): Observable<WledMatrixDevice> {
-    const probeSeed$ = this.probeIp(seedIp).pipe(
-      filter((d): d is WledMatrixDevice => d !== null)
-    );
+  /** Saved-IP phase: probe seed, then /json/nodes (counts as the one nodes lookup). */
+  private discoverFromSeed(
+    seedIp: string,
+    ctx: DiscoveryContext,
+    abort$: Observable<void>
+  ): Observable<WledMatrixDevice> {
+    ctx.triedNodeSeeds.add(seedIp);
+    ctx.nodesLookupInProgress = true;
 
-    const probeNodes$ = this.http.get<WledNodesResponse>(`http://${seedIp}/json/nodes`).pipe(
-      timeout(PROBE_TIMEOUT_MS),
-      catchError(() => of({ nodes: [] } as WledNodesResponse)),
-      concatMap(response => {
-        const ips = (response.nodes ?? [])
-          .map(n => n.ip)
-          .filter(ip => !!ip && ip !== seedIp && isPrivateIp(ip));
-
-        if (ips.length === 0) return EMPTY;
-
-        return from(ips).pipe(
-          mergeMap(ip => this.probeIp(ip), SCAN_CONCURRENCY),
-          filter((d): d is WledMatrixDevice => d !== null)
-        );
+    const probeSeed$ = this.probeWledInfo(seedIp).pipe(
+      concatMap(info => {
+        if (!info) return EMPTY;
+        const matrix = this.parseMatrixDevice(seedIp, info);
+        return matrix ? of(matrix) : EMPTY;
       })
     );
 
-    return concat(probeSeed$, probeNodes$).pipe(takeUntil(abort$));
+    const probeNodes$ = this.queryNodesForMatrixDevices(seedIp, ctx).pipe(
+      finalize(() => {
+        ctx.nodesLookupInProgress = false;
+        this.tryNextPendingNodeSeed(ctx, abort$);
+      })
+    );
+
+    return merge(probeSeed$, probeNodes$).pipe(takeUntil(abort$));
   }
 
   private scanSubnet(
     base: string,
-    knownIps: Set<string>,
+    ctx: DiscoveryContext,
     abort$: Observable<void>
   ): Observable<WledMatrixDevice> {
     if (!isPrivateSubnetBase(base)) {
       return EMPTY;
     }
 
-    const ips = Array.from({ length: 254 }, (_, i) => `${base}.${i + 1}`).filter(ip => !knownIps.has(ip));
+    const ips = Array.from({ length: 254 }, (_, i) => `${base}.${i + 1}`).filter(
+      ip => !ctx.foundIps.has(ip)
+    );
 
     return from(ips).pipe(
-      mergeMap(ip => this.probeIp(ip), SCAN_CONCURRENCY),
-      filter((d): d is WledMatrixDevice => d !== null),
+      mergeMap(
+        ip =>
+          this.probeWledInfo(ip).pipe(
+            concatMap(info => {
+              if (!info) return EMPTY;
+
+              this.scheduleNodesLookup(ip, ctx, abort$);
+
+              const matrix = this.parseMatrixDevice(ip, info);
+              return matrix ? of(matrix) : EMPTY;
+            })
+          ),
+        SCAN_CONCURRENCY
+      ),
       takeUntil(abort$)
     );
   }
 
-  private probeIp(ip: string): Observable<WledMatrixDevice | null> {
+  /**
+   * Attempt /json/nodes on the first WLED found during scanning.
+   * If it fails (HTTP error or empty list), the next WLED found is tried, and so on.
+   * Only one successful nodes query runs per discovery session.
+   */
+  private scheduleNodesLookup(seedIp: string, ctx: DiscoveryContext, abort$: Observable<void>): void {
+    if (ctx.nodesLookupSucceeded) return;
+
+    if (ctx.nodesLookupInProgress) {
+      if (!ctx.triedNodeSeeds.has(seedIp) && !ctx.pendingNodeSeeds.includes(seedIp)) {
+        ctx.pendingNodeSeeds.push(seedIp);
+      }
+      return;
+    }
+
+    if (ctx.triedNodeSeeds.has(seedIp)) return;
+
+    ctx.triedNodeSeeds.add(seedIp);
+    ctx.nodesLookupInProgress = true;
+
+    this.queryNodesForMatrixDevices(seedIp, ctx)
+      .pipe(
+        finalize(() => {
+          ctx.nodesLookupInProgress = false;
+          this.tryNextPendingNodeSeed(ctx, abort$);
+        }),
+        takeUntil(abort$)
+      )
+      .subscribe({
+        next: device => ctx.nodesSubject.next(device),
+        error: () => undefined
+      });
+  }
+
+  private tryNextPendingNodeSeed(ctx: DiscoveryContext, abort$: Observable<void>): void {
+    if (ctx.nodesLookupSucceeded) {
+      ctx.pendingNodeSeeds.length = 0;
+      return;
+    }
+
+    while (ctx.pendingNodeSeeds.length > 0) {
+      const next = ctx.pendingNodeSeeds.shift()!;
+      if (!ctx.triedNodeSeeds.has(next)) {
+        this.scheduleNodesLookup(next, ctx, abort$);
+        return;
+      }
+    }
+  }
+
+  private queryNodesForMatrixDevices(
+    seedIp: string,
+    ctx: DiscoveryContext
+  ): Observable<WledMatrixDevice> {
+    return this.http.get<WledNodesResponse>(`http://${seedIp}/json/nodes`).pipe(
+      timeout(PROBE_TIMEOUT_MS),
+      catchError(() => of(null)),
+      concatMap(response => {
+        if (!response) return EMPTY;
+
+        const ips = (response.nodes ?? [])
+          .map(n => n.ip)
+          .filter(ip => !!ip && ip !== seedIp && isPrivateIp(ip) && !ctx.foundIps.has(ip));
+
+        if (ips.length === 0) return EMPTY;
+
+        ctx.nodesLookupSucceeded = true;
+        ctx.pendingNodeSeeds.length = 0;
+
+        return from(ips).pipe(
+          mergeMap(ip => this.probeMatrixDevice(ip), SCAN_CONCURRENCY),
+          filter((d): d is WledMatrixDevice => d !== null)
+        );
+      })
+    );
+  }
+
+  private probeMatrixDevice(ip: string): Observable<WledMatrixDevice | null> {
+    return this.probeWledInfo(ip).pipe(
+      map(info => (info ? this.parseMatrixDevice(ip, info) : null))
+    );
+  }
+
+  private probeWledInfo(ip: string): Observable<WledInfo | null> {
     if (!isPrivateIp(ip)) {
       return of(null);
     }
 
     return this.http.get<WledInfo>(`http://${ip}/json/info`).pipe(
       timeout(PROBE_TIMEOUT_MS),
-      map(info => this.parseMatrixDevice(ip, info)),
+      map(info => (this.isWledDevice(info) ? info : null)),
       catchError(() => of(null))
     );
+  }
+
+  private isWledDevice(info: WledInfo): boolean {
+    return info?.brand === 'WLED' || !!info?.ver;
   }
 
   private parseMatrixDevice(ip: string, info: WledInfo): WledMatrixDevice | null {
     const matrix = info?.leds?.matrix;
     if (!matrix?.w || !matrix?.h) return null;
 
-    const isWled = info.brand === 'WLED' || !!info.ver;
-    if (!isWled) return null;
+    if (!this.isWledDevice(info)) return null;
 
     return {
       ip,
