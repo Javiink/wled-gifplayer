@@ -20,33 +20,35 @@ type SettingsMode = 'manual' | 'dropdown';
       <p class="mb-2">Your WLED-based 2D matrix device IP:</p>
 
       @if (mode === 'manual') {
-        <div class="flex flex-nowrap gap-2">
+        <div class="flex flex-wrap flex-col md:flex-row gap-2">
           <input
             [(ngModel)]="wledIp"
             placeholder="ex. 192.168.X.X"
             class="min-w-0 flex-1 bg-cyan-900 border border-cyan-700 p-2 rounded-lg"
           >
-          <button
-            (click)="scan()"
-            [disabled]="scanning"
-            class="shrink-0 bg-cyan-700 shadow-lg shadow-cyan-700/50 px-3 py-2 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            @if (scanning) {
-              <i class="fas fa-spinner fa-spin"></i>
-            } @else {
-              <i class="fas fa-search"></i>
-            }
-            Scan
-          </button>
-          <button
-            (click)="save()"
-            class="shrink-0 bg-cyan-500 shadow-lg shadow-cyan-500/50 px-4 py-2 rounded cursor-pointer"
-          >
-            <i class="fas fa-save"></i> Save
-          </button>
+          <div class="flex flex-wrap sm:flex-nowrap gap-2">
+            <button
+              (click)="scan()"
+              [disabled]="scanning"
+              class="shrink-0 grow bg-cyan-700 shadow-lg shadow-cyan-700/50 px-3 py-2 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              @if (scanning) {
+                <i class="fas fa-spinner fa-spin"></i>
+              } @else {
+                <i class="fas fa-search"></i>
+              }
+              Scan
+            </button>
+            <button
+              (click)="save()"
+              class="shrink-0 grow bg-cyan-500 shadow-lg shadow-cyan-500/50 px-4 py-2 rounded cursor-pointer"
+            >
+              <i class="fas fa-save"></i> Save
+            </button>
+          </div>
         </div>
       } @else {
-        <div class="flex flex-nowrap gap-2">
+        <div class="flex flex-wrap flex-col md:flex-row gap-2">
           <select
             [(ngModel)]="selectedIp"
             (change)="onDeviceSelected($any($event.target).value)"
@@ -60,25 +62,27 @@ type SettingsMode = 'manual' | 'dropdown';
             }
             <option [value]="manualOptionValue">Enter IP manually…</option>
           </select>
-          <button
-            (click)="scan()"
-            [disabled]="scanning"
-            class="shrink-0 bg-cyan-700 shadow-lg shadow-cyan-700/50 px-3 py-2 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            @if (scanning) {
-              <i class="fas fa-spinner fa-spin"></i>
-            } @else {
-              <i class="fas fa-search"></i>
-            }
-            Scan
-          </button>
-          <button
-            (click)="save()"
-            [disabled]="!selectedIp || selectedIp === manualOptionValue"
-            class="shrink-0 bg-cyan-500 shadow-lg shadow-cyan-500/50 px-4 py-2 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i class="fas fa-save"></i> Save
-          </button>
+          <div class="flex flex-wrap sm:flex-nowrap gap-2">
+            <button
+              (click)="scan()"
+              [disabled]="scanning"
+              class="shrink-0 grow bg-cyan-700 shadow-lg shadow-cyan-700/50 px-3 py-2 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              @if (scanning) {
+                <i class="fas fa-spinner fa-spin"></i>
+              } @else {
+                <i class="fas fa-search"></i>
+              }
+              Scan
+            </button>
+            <button
+              (click)="save()"
+              [disabled]="!selectedIp || selectedIp === manualOptionValue"
+              class="shrink-0 grow bg-cyan-500 shadow-lg shadow-cyan-500/50 px-4 py-2 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <i class="fas fa-save"></i> Save
+            </button>
+          </div>
         </div>
       }
 
