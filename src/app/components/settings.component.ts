@@ -16,7 +16,7 @@ type SettingsMode = 'manual' | 'dropdown';
   imports: [FormsModule],
   template: `
     <p class="mb-4 text-xl"><i class="fas fa-cog"></i> Settings</p>
-    <div>
+    <div class="max-w-full">
       <p class="mb-2">Your WLED-based 2D matrix device IP:</p>
 
       @if (mode === 'manual') {
@@ -48,11 +48,11 @@ type SettingsMode = 'manual' | 'dropdown';
           </div>
         </div>
       } @else {
-        <div class="flex flex-wrap flex-col md:flex-row gap-2">
+        <div class="flex flex-wrap flex-col md:flex-row gap-2 max-w-full">
           <select
             [(ngModel)]="selectedIp"
             (change)="onDeviceSelected($any($event.target).value)"
-            class="min-w-0 flex-1 bg-cyan-900 border border-cyan-700 p-2 rounded-lg"
+            class="min-w-0 max-w-full flex-1 bg-cyan-900 border border-cyan-700 p-2 rounded-lg"
           >
             @if (devices.length === 0) {
               <option value="" disabled>Select a device…</option>
