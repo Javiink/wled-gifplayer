@@ -14,5 +14,23 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - id: build-publish
-      uses: bitovi/github-actions-angular-to-github-pages@v1.0.0
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build
+        run: |
+          echo "::group::Build"
+          npm ci
+          npm run build -- --base-href=/${{ github.event.repository.name }}/
+          echo "::endgroup::"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/${{ github.event.repository.name }}/browser
+
+      - id: deploy
+        name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
