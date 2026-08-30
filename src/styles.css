@@ -1,6 +1,50 @@
 /* You can add global styles to this file, and also import other style files */
 @import "tailwindcss";
 
+/* Chromium / Safari / Edge: custom scrollbars (no scrollbar-width/color here — they disable these pseudo-elements). */
+*::-webkit-scrollbar {
+  width: 0.3rem;
+  height: 0.3rem;
+}
+
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:double-button,
+*::-webkit-scrollbar-button:vertical:start:decrement,
+*::-webkit-scrollbar-button:vertical:end:increment,
+*::-webkit-scrollbar-button:horizontal:start:decrement,
+*::-webkit-scrollbar-button:horizontal:end:increment {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #155e75; /* cyan-800 */
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #0e7490; /* cyan-700 */
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox: standard properties only (no per-part styling). */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #155e75 transparent;
+  }
+}
+
 body{
   @apply text-blue-50;
 }
