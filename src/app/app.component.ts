@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -8,7 +8,9 @@ import { FavoritesComponent } from './components/favorites.component';
 import { PlaylistsComponent } from './components/playlists.component';
 import { SettingsComponent } from './components/settings.component';
 import { CurrentGifComponent } from './components/current-gif.component';
+import { WelcomeToastComponent } from './components/welcome-toast.component';
 import { ModalService } from './services/modal.service';
+import { WelcomeService } from './services/welcome.service';
 
 @Component({
   selector: 'app-root',
@@ -19,17 +21,29 @@ import { ModalService } from './services/modal.service';
     GifGridInfiniteComponent,
     FavoritesComponent,
     PlaylistsComponent,
-    CurrentGifComponent
+    CurrentGifComponent,
+    WelcomeToastComponent
   ],
   templateUrl: 'app.component.html'
 })
-export class AppComponent {
-  showSettings = false;
+export class AppComponent implements OnInit {
+  showWelcomeToast = false;
 
-  constructor(private modal: ModalService) {
+  constructor(
+    private modal: ModalService,
+    private welcome: WelcomeService
+  ) {}
+
+  ngOnInit(): void {
+    this.showWelcomeToast = this.welcome.shouldShow();
+  }
+
+  onWelcomeDismiss(): void {
+    this.welcome.dismiss();
+    this.showWelcomeToast = false;
   }
 
   async openConfigDialog() {
-    const result = await this.modal.open(SettingsComponent);
+    await this.modal.open(SettingsComponent);
   }
 }
