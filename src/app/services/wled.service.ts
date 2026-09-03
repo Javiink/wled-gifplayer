@@ -109,8 +109,8 @@ export class WledService {
       return of(false);
     }
 
-    return this.cleanupGifPresets(ip).pipe(
-      switchMap(() => this.ensureGifOnDevice(ip, filename)),
+    const protectCurrent = currentFile ? [currentFile] : [];
+    return this.ensureGifOnDevice(ip, filename, protectCurrent).pipe(
       switchMap(result => {
         if (!result.ok) {
           this.modal.open(HtmlModalContentComponent, {
@@ -365,16 +365,15 @@ export class WledService {
 
   /**
    * Ensure a GIF is present on the device: skip upload if cached, otherwise free space and upload.
+   * Lists device files first; fetches filesystem info only when an upload may be needed.
    */
   private ensureGifOnDevice(
     ip: string,
-    filename: string
+    filename: string,
+    protectExtra: string[] = []
   ): Observable<{ ok: boolean; reason?: 'space' | 'upload' }> {
-    return forkJoin({
-      files: this.listDeviceFiles(ip),
-      fs: this.getFilesystemInfo(ip)
-    }).pipe(
-      switchMap(({ files, fs }) => {
+    return this.listDeviceFiles(ip).pipe(
+      switchMap(files => {
         if (files.some(f => f.name === filename)) {
           return of({ ok: true as const });
         }
@@ -385,19 +384,23 @@ export class WledService {
               return of({ ok: false as const, reason: 'upload' as const });
             }
 
-            return this.ensureSpaceFor(ip, size, [filename], files, fs.freeBytes).pipe(
-              switchMap(space => {
-                if (!space.ok) {
-                  return of({ ok: false as const, reason: 'space' as const });
-                }
-                return this.uploadGifFile(ip, filename).pipe(
-                  map(result =>
-                    result.ok
-                      ? { ok: true as const }
-                      : { ok: false as const, reason: 'upload' as const }
-                  )
-                );
-              })
+            return this.getFilesystemInfo(ip).pipe(
+              switchMap(fs =>
+                this.ensureSpaceFor(ip, size, [filename, ...protectExtra], files, fs.freeBytes).pipe(
+                  switchMap(space => {
+                    if (!space.ok) {
+                      return of({ ok: false as const, reason: 'space' as const });
+                    }
+                    return this.uploadGifFile(ip, filename).pipe(
+                      map(result =>
+                        result.ok
+                          ? { ok: true as const }
+                          : { ok: false as const, reason: 'upload' as const }
+                      )
+                    );
+                  })
+                )
+              )
             );
           })
         );
@@ -671,29 +674,6 @@ export class WledService {
           })
         );
       })
-    );
-  }
-
-  /** Remove all gifpl-* presets from the device without creating new ones. */
-  private cleanupGifPresets(ip: string): Observable<void> {
-    return this.fetchPresetsJson(ip).pipe(
-      switchMap(presets => {
-        const cleaned = this.removeGifplPresets(presets);
-        const hadGifpl = Object.keys(presets).some(key => {
-          const name = typeof presets[key]?.n === 'string' ? presets[key].n! : '';
-          return name.startsWith(PRESET_PREFIX);
-        });
-
-        if (!hadGifpl) {
-          return of(undefined);
-        }
-
-        return this.uploadPresetsJson(ip, cleaned).pipe(
-          map(() => undefined),
-          catchError(() => of(undefined))
-        );
-      }),
-      catchError(() => of(undefined))
     );
   }
 
